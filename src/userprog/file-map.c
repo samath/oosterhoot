@@ -134,8 +134,8 @@ static struct fpm_info* fpm_from_fp (struct file_map *fm, struct file *fp)
 {
   if (fp == NULL) return NULL;
   struct fpm_info * start = fm->fp_map[hash(fp)];
-  while(start) {
-    if(start->fp == fp) return start;
+  while (start) {
+    if (start->fp == fp) return start;
     start = start->next;
   }
   return NULL;

@@ -648,7 +648,7 @@ alloc_frame (struct thread *t, size_t size)
 
 
 bool
-thread_compare_priority (const struct list_elem *a, const struct list_elem *b, void *aux)
+thread_compare_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
   return list_entry (a, struct thread, elem)->eff_priority <
     list_entry (b, struct thread, elem)->eff_priority; 

@@ -47,6 +47,8 @@ process_execute (const char *cmd)
 
   /* Initialize the structure for the child process's information */ 
   struct pinfo *child = malloc (sizeof (struct pinfo));
+  if (child == NULL)
+    return TID_ERROR;
   child->parent = t;
   child->exec_state = PROCESS_STARTING;
   child->exit_code = 0;
@@ -74,6 +76,8 @@ process_execute (const char *cmd)
   /* Create a new thread to execute CMD. */
   int tid = thread_create (arg0, PRI_DEFAULT, start_process, child);
 
+  palloc_free_page (arg0);
+
   if (tid != TID_ERROR) {
     /* Wait for the child to finish or fail initialization before proceeding */
     while (child->exec_state == PROCESS_STARTING) {
@@ -87,8 +91,6 @@ process_execute (const char *cmd)
   } else {
     palloc_free_page (child->cmd);
   }
-
-  palloc_free_page (arg0);
 
   return tid;
 }
