@@ -32,7 +32,7 @@ void
 frame_alloc (struct frame *fte)
 {
   ASSERT (fte->paddr == NULL);
-  fte->paddr = palloc_get_page (PAL_USER);
+  fte->paddr = palloc_get_page (PAL_USER|PAL_ZERO);
 
   /* todo: implement swapping */
   if (fte->paddr == NULL)
