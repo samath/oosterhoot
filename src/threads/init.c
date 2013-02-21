@@ -103,7 +103,9 @@ main (void)
   paging_init ();
 
   /* Initialize virtual memory system */
+#ifdef VM
   frame_init ();
+#endif
 
   /* Segmentation. */
 #ifdef USERPROG
