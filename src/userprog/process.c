@@ -18,7 +18,11 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+
+#ifdef VM
 #include "vm/frame.h"
+#include "vm/page.h"
+#endif
 
 static thread_func start_process NO_RETURN;
 static bool load (struct pinfo *pinfo, void (**eip) (void), void **esp);
@@ -109,6 +113,9 @@ start_process (void *pinfo_)
   struct thread *t = thread_current ();
   t->pinfo = pinfo;
   pinfo->tid = t->tid; 
+
+  /* Initialize supplemental page table. */
+  t->spt = supp_page_create ();
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -612,9 +619,13 @@ setup_stack (void **esp, const char *cmd, int arg_len, int argc)
 {
   bool success = false;
 
+#ifdef VM
   struct frame *fte = frame_create();
   frame_alloc (fte);
   uint32_t *kpage = fte->paddr;
+#else
+  uint32_t *kpage = palloc_get_page (0);
+#endif
   
   if (kpage != NULL) 
     {

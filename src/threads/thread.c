@@ -612,13 +612,16 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   
+  /* Initialization for priority donation */
   t->base_priority = priority;
   t->eff_priority = priority;
   t->donation_receipts = NULL;
 
+  /* Initialization for mlfqs */
   t->nice = 0;
   t->recent_cpu = 0;
 
+  /* Initiailization for process inheritance */
   list_init (&t->children);
   lock_init (&t->child_lock);
   cond_init (&t->child_done);

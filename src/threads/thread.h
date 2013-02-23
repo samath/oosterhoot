@@ -7,6 +7,10 @@
 #include "threads/fixed-point.h"
 #include "threads/synch.h"
 
+#ifdef VM
+#include "vm/page.h"
+#endif
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -120,16 +124,20 @@ struct thread
     struct pinfo *pinfo;                /* This thread's process information */
     struct list children;               /* List of child process information */
 
-    struct lock child_lock;              /* Lock for parent-child synchro */
-    struct condition child_done;         /* Condvar for the same */
+    struct lock child_lock;             /* Lock for parent-child synchro */
+    struct condition child_done;        /* Condvar for the same */
 #endif
 
-    /* Owned by thread.c. */
-    unsigned magic;                     /* Detects stack overflow. */
+#ifdef VM
+    struct supp_page_table *spt;
+#endif
 
     /* mlfqs state */
     int nice;                           /* Thread niceness. */
     fixed_point recent_cpu;             /* Recent cpu usage */
+
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
   };
 
 /*
