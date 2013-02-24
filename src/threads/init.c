@@ -33,6 +33,7 @@
 #endif
 #ifdef VM
 #include "vm/frame.h"
+#include "vm/swap.c"
 #endif
 #ifdef FILESYS
 #include "devices/block.h"
@@ -133,6 +134,9 @@ main (void)
   ide_init ();
   locate_block_devices ();
   filesys_init (format_filesys);
+#ifdef VM
+  swap_init();
+#endif
 #endif
 
   printf ("Boot complete.\n");
