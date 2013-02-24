@@ -114,8 +114,10 @@ start_process (void *pinfo_)
   t->pinfo = pinfo;
   pinfo->tid = t->tid; 
 
-  /* Initialize supplemental page table. */
-  t->spt = supp_page_create ();
+  /* Initialize supplemental page table.
+     Do this here instead of in init_thread because the spt is
+     associated with user processes only, not kernel threads */
+  t->spt = supp_page_table_create ();
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -620,16 +622,23 @@ setup_stack (void **esp, const char *cmd, int arg_len, int argc)
   bool success = false;
 
 #ifdef VM
-  struct frame *fte = frame_create();
-  frame_alloc (fte);
-  uint32_t *kpage = fte->paddr;
+  /* TODO: Pin the frame created here to prevent eviction */
+  struct supp_page *spe = supp_page_insert (
+    thread_current ()->spt, ((uint8_t *) PHYS_BASE) - PGSIZE,
+    SUPP_PAGE_ZERO, false);
+  supp_page_alloc(spe);
+  uint32_t *kpage = spe->fte->paddr;
 #else
   uint32_t *kpage = palloc_get_page (0);
 #endif
   
   if (kpage != NULL) 
     {
+      #ifdef VM
+      success = true;
+      #else
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      #endif
       if (success)
         {
           /* Use two pointers: one to push raw data, one to push arg[v|c] */
@@ -690,6 +699,9 @@ setup_stack (void **esp, const char *cmd, int arg_len, int argc)
   return success;
 }
 
+
+
+
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.
    If WRITABLE is true, the user process may modify the page;
@@ -709,3 +721,4 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "lib/kernel/list.h"
+#include "vm/page.h"
 
 enum frame_flags
   {
@@ -13,8 +14,8 @@ enum frame_flags
 struct frame
   {
     uint32_t *paddr;            // Physical address of this frame table entry
-    struct list spte_list;      // List of supplemental page entries that point to
-                                // this frame. In this case, supp_pages will have
+    struct list spe_list;       // List of supplemental page entries that point to
+                                // this frame. In this case, spe_list will have
                                 // size at most two: the kernel and user page entries
     struct list_elem elem;      // For indexing in the main frame table list
   };
@@ -22,7 +23,7 @@ struct frame
 
 void frame_init (void);
 struct frame *frame_create (void);
-void frame_alloc (struct frame *fte);
+void frame_alloc (struct frame *fte, enum supp_page_source src);
 void frame_free (struct frame *fte);
 
 #endif
