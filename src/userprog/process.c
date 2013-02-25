@@ -626,7 +626,7 @@ setup_stack (void **esp, const char *cmd, int arg_len, int argc)
   struct supp_page *spe = supp_page_insert (
     thread_current ()->spt, ((uint8_t *) PHYS_BASE) - PGSIZE,
     SUPP_PAGE_ZERO, false);
-  supp_page_alloc(spe);
+  supp_page_alloc (spe);
   uint32_t *kpage = spe->fte->paddr;
 #else
   uint32_t *kpage = palloc_get_page (0);

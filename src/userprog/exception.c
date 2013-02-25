@@ -153,7 +153,29 @@ page_fault (struct intr_frame *f)
 #ifdef VM
   struct thread *t = thread_current ();
   struct supp_page_table *spt = t->spt;
+  struct supp_page *spe = supp_page_lookup (spt, fault_addr);
 
+  /* TODO: synchronize this */
+
+  if (spe == NULL) {
+    /* No page entry exists yet, so create a new one */
+
+    /* NOTE: I think it was mentioned that user programs should only
+       be allowed stack memory. So Sam, only allocate a new page
+       if the fault address appears to be a valid stack growth? */
+
+    bool stack_growth = true;
+    if (stack_growth) {
+      struct supp_page *spe = supp_page_insert (
+        t->spt, fault_addr, SUPP_PAGE_ZERO, false);
+      supp_page_alloc (spe);
+      return;
+    }
+  } else {
+    /* Otherwise, the page entry exists, so bring it in */
+    if (!spe->ro) 
+      supp_page_alloc (spe);
+  }
 
 #else
   /* To implement virtual memory, delete the rest of the function
