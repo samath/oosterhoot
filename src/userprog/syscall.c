@@ -8,11 +8,16 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "lib/syscall-nr.h"
+#include "lib/user/syscall_types.h"
 #include "devices/shutdown.h"
 #include "devices/input.h"
 #include "threads/synch.h"
 #include "pagedir.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+
+#include "vm/mmap_table.h"
+#include "vm/page.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -30,6 +35,11 @@ static void syscall_seek (int fd, unsigned position);
 static unsigned syscall_tell (int fd);
 static void syscall_close (int fd);
 
+static mapid_t syscall_mmap (int fd, void *addr);
+static void syscall_munmap (mapid_t mid);
+
+static struct mmap_entry * mmap_entry_from_fd (int fd);
+
 static void *utok_addr (void *uptr);
 static void *uptr_valid (void *uptr);
 static void *str_valid (void *str);
@@ -37,6 +47,10 @@ static void *buffer_valid (void *buffer, unsigned size);
 
 struct file_map *fm;
 struct lock filesys_lock;
+
+#define BASE_MMAP_ID 2
+struct lock mmap_lock;
+mapid_t next_mmap_id;
 
 void
 syscall_init (void) 
@@ -49,6 +63,8 @@ syscall_init (void)
   }
   lock_init (&filesys_lock);
   lock_init (&cleanup_lock);
+  lock_init (&mmap_lock);
+  next_mmap_id = BASE_MMAP_ID;
 }
 
 
@@ -68,7 +84,9 @@ static int syscall_argc[] =
     3,  // Write
     2,  // Seek
     1,  // Tell
-    1   // Close
+    1,  // Close
+    2,  // Mmap
+    1   // Munmap
   };
 
 static void
@@ -177,6 +195,13 @@ syscall_handler (struct intr_frame *f)
       break;
     case SYS_CLOSE:
       syscall_close ((int) argbuf[0]);
+      break;
+    case SYS_MMAP:
+      // addr will be checked internally inside mmap
+      retval = (int) syscall_mmap ((int) argbuf[0], (void *) argbuf[1]);
+      break;
+    case SYS_MUNMAP:
+      syscall_munmap ((int) argbuf[0]);
       break;
     default:
       printf("unhandled system call!\n");
@@ -326,6 +351,86 @@ static void syscall_close (int fd)
 {
   close_fd (fm, fd);
 }
+
+static mapid_t syscall_mmap (int fd, void *addr) 
+{
+  if(fd == 0 || fd == 1 || addr != NULL || (int) addr % PGSIZE != 0) {
+    syscall_exit (-1);
+    return MAP_FAILED;
+  }
+
+  struct mmap_entry *mme = mmap_entry_from_fd (fd);
+  if (mme == NULL) {
+    syscall_exit (-1);
+    return MAP_FAILED;
+  }
+ 
+  struct supp_page_table *spt = thread_current ()->spt;
+  unsigned i = 0;
+  lock_acquire (&spt->lock);
+  for(; i < mme->num_pages; i++) {
+    /* TODO 
+       Check if i-th virtual address page is a valid address 
+       and if it is already in use in the SPT.
+       The use of utok_addr here is probably wrong, I need a way to
+       check if it is a valid address without caring if it is mapped.
+    */
+    if (utok_addr ((char *)addr + i * PGSIZE) == NULL ||
+        supp_page_lookup (spt, (char *)addr + i * PGSIZE) != NULL) {
+      lock_release (&spt->lock);
+      free (mme);
+      syscall_exit (-1);
+      return MAP_FAILED;
+    }
+  }
+  i = 0;
+  for(; i < mme->num_pages; i++) {
+    supp_page_insert (spt, (char *)addr + i * PGSIZE,
+                      SUPP_PAGE_MMAP, false);
+  }
+  lock_release (&spt->lock);
+
+  file_reopen (mme->fp);
+
+  lock_acquire (&mmap_lock);
+  mme->map_id = next_mmap_id;
+  next_mmap_id++;
+  lock_release (&mmap_lock);  
+
+  mmap_table_insert (thread_current ()->mmt, mme);
+  return mme->map_id;
+}
+
+static void syscall_munmap (mapid_t mid) 
+{
+  struct mmap_entry *mme = mmap_table_lookup (thread_current ()->mmt, mid);
+
+  // Walk PT.  Write contents back to file && clear entries
+  // Clear all entries from SPT
+
+  mmap_table_remove (thread_current ()->mmt, mid);
+}
+
+static struct mmap_entry * mmap_entry_from_fd (int fd)
+{
+  struct file_with_lock fwl = fwl_from_fd (fm, fd);
+  if (fwl.fp == NULL) return NULL;
+
+  lock_acquire (fwl.lock);
+  int filesize = file_length (fwl.fp);
+  lock_release (fwl.lock);
+  if (filesize == 0) return NULL;
+
+  struct mmap_entry *mme = malloc (sizeof(struct mmap_entry));
+  if (mme == NULL) return NULL;
+
+  mme->fd = fd;
+  mme->fp = fwl.fp;
+  mme->num_pages = 1 + (filesize - 1) / PGSIZE;
+  mme->zero_bytes = mme->num_pages * PGSIZE - filesize;
+  return mme;
+}
+
 
 
 /* Convert a user virtual addr into a kernel virtual addr.

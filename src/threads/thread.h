@@ -9,6 +9,7 @@
 
 #ifdef VM
 #include "vm/page.h"
+#include "vm/mmap_table.h"
 #endif
 
 /* States in a thread's life cycle. */
@@ -130,6 +131,7 @@ struct thread
 
 #ifdef VM
     struct supp_page_table *spt;
+    struct mmap_table *mmt;
 #endif
 
     /* mlfqs state */

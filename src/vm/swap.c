@@ -9,6 +9,7 @@ swap_init (void)
 {
   block_sector_t num_sectors;
 
+  //TODO check all mallocs!
   st = malloc(sizeof(struct swap_table));
   lock_init(&st->swap_table_lock);
 

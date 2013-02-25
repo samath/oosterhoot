@@ -27,7 +27,8 @@ struct supp_page
     struct list_elem list_elem; // For frame table -> supp page table access
 
     struct frame *fte;          // For supp page table -> frame table access
-    struct thread *thread;      // For thread (and thus supp page table) access
+    struct thread *thread;      // For thread (and thus supp page table) 
+                                // access
   };
 
 struct supp_page_table

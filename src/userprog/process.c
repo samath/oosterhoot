@@ -22,6 +22,7 @@
 #ifdef VM
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/mmap_table.h"
 #endif
 
 static thread_func start_process NO_RETURN;
@@ -118,6 +119,8 @@ start_process (void *pinfo_)
      Do this here instead of in init_thread because the spt is
      associated with user processes only, not kernel threads */
   t->spt = supp_page_table_create ();
+  /* Similarly for mmap_table */
+  t->mmt = mmap_table_create ();
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -248,6 +251,8 @@ process_cleanup (int exit_code)
 
   /* Close all files opened by this process */
   file_close (t->pinfo->fp);
+
+  mmap_table_dispose ();
 
   lock_release (&cleanup_lock);
 }
