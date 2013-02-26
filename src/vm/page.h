@@ -22,7 +22,7 @@ struct supp_page
                                 // frame's location in either swap space or
                                 // the mmap table
 
-    bool ro;                    // Read Only    TODO: Bit flags
+    bool ro;                    // Read Only
 
     enum supp_page_source src;  // Whether this page is in swap, mmaped, or
                                 // is not yet initialized
@@ -31,8 +31,7 @@ struct supp_page
     struct list_elem list_elem; // For frame table -> supp page table access
 
     struct frame *fte;          // For supp page table -> frame table access
-    struct thread *thread;      // For thread (and thus supp page table) 
-                                // access
+    struct thread *thread;      // For thread (and thus supp page table) access
   };
 
 struct supp_page_table
@@ -47,6 +46,9 @@ struct supp_page *supp_page_lookup (struct supp_page_table *spt,
   void *uaddr);
 struct supp_page *supp_page_insert (struct supp_page_table *spt,
   void *uaddr, enum supp_page_source src, bool ro); 
+void supp_page_remove (struct supp_page_table *spt,
+  void *uaddr);
 void supp_page_alloc (struct supp_page *spe);
+void supp_page_dealloc (struct supp_page *spe);
 
 #endif

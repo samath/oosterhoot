@@ -1,4 +1,3 @@
-#include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
@@ -43,13 +42,14 @@ supp_page_table_create (void)
 struct supp_page *
 supp_page_lookup (struct supp_page_table *spt, void *uaddr)
 {
-  /* Apparently we have to construct a new entry just for comparison */
   struct supp_page dummy_spe;
   dummy_spe.uaddr = pg_round_down (uaddr);
+
   struct hash_elem *result = hash_find (&spt->hash_table, &dummy_spe.hash_elem);
   return result == NULL ? NULL : \
       hash_entry (result, struct supp_page, hash_elem);
 }
+
 
 /* Add a new entry to the supplemental page table. */
 struct supp_page *
@@ -63,13 +63,12 @@ supp_page_insert (struct supp_page_table *spt, void *uaddr,
   spe->uaddr = pg_round_down (uaddr);
   spe->src = src;
   spe->ro = ro;
-  spe->thread = thread_current ();
   spe->fte = NULL;
+  spe->thread = thread_current ();
   
-  //Create a pointer to auxiliary data to help locate frames
-  spe->aux = malloc(sizeof(uint32_t));
+  /* spe->aux = malloc(sizeof(uint32_t));
   if(spe->aux == NULL)
-    PANIC ("Failed to malloc aux pointer in supplemental page entry");
+    PANIC ("Failed to malloc aux pointer in supplemental page entry"); */
 
   lock_acquire (&spt->lock);
   hash_insert (&spt->hash_table, &spe->hash_elem);
@@ -77,6 +76,19 @@ supp_page_insert (struct supp_page_table *spt, void *uaddr,
 
   return spe;
 }
+
+/* Remove an entry from the supplemental page table. */
+void
+supp_page_remove (struct supp_page_table *spt, void *uaddr)
+{
+  struct supp_page dummy_spe;
+  dummy_spe.uaddr = pg_round_down (uaddr);
+
+  struct supp_page *deleted = hash_delete (&spt->hash_table,
+                                           &dummy_spe.hash_elem);
+  ASSERT (deleted != NULL);
+}
+
 
 /* Obtains a physical frame to host the supplemental page table 
    entry's address. Updates the real page table with the mapping. */
@@ -86,10 +98,23 @@ supp_page_alloc (struct supp_page *spe)
   ASSERT (spe->fte == NULL);
 
   spe->fte = frame_create ();
-
-  frame_alloc (spe->fte, spe->aux, spe->src);
+  list_push_back (&spe->fte->users, &spe->list_elem);
+  frame_alloc (spe->fte, spe->src);
   
   pagedir_set_page (spe->thread->pagedir, spe->uaddr,
                     spe->fte->paddr, !spe->ro);
 }
 
+
+/* Removes the page entry from physical memory. Updates
+   the real page table with the mapping. */
+void
+supp_page_dealloc (struct supp_page *spe)
+{
+  if (spe->fte == NULL) return;
+
+  list_remove (&spe->list_elem);
+  spe->fte = NULL;
+
+  pagedir_clear_page (spe->thread->pagedir, spe->uaddr);
+}
