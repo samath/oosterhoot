@@ -30,8 +30,9 @@ struct mmap_entry *mmap_table_lookup (struct mmap_table *mmt,
     mapid_t map_id);
 void mmap_table_insert (struct mmap_table *mmt, 
     struct mmap_entry *mme);
+void mmap_table_unmap (struct mmap_table *mmt, mapid_t map_id);
 void mmap_table_remove (struct mmap_table *mmt,
     mapid_t map_id);
-void mmap_table_dispose (void);
+void mmap_table_destroy (void);
 
 #endif

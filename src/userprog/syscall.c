@@ -18,6 +18,7 @@
 
 #include "vm/mmap_table.h"
 #include "vm/page.h"
+#include "vm/frame.h"
 
 static void syscall_handler (struct intr_frame *);
 
@@ -354,20 +355,16 @@ static void syscall_close (int fd)
 
 static mapid_t syscall_mmap (int fd, void *addr) 
 {
-  if(fd == 0 || fd == 1 || addr != NULL || (int) addr % PGSIZE != 0) {
-    syscall_exit (-1);
+  if(fd == 0 || fd == 1 || addr == NULL || (int) addr % PGSIZE != 0) {
     return MAP_FAILED;
   }
 
   struct mmap_entry *mme = mmap_entry_from_fd (fd);
-  if (mme == NULL) {
-    syscall_exit (-1);
-    return MAP_FAILED;
-  }
- 
+  if (mme == NULL) return MAP_FAILED;
+
+  mme->uaddr = addr;
   struct supp_page_table *spt = thread_current ()->spt;
   unsigned i = 0;
-  lock_acquire (&spt->lock);
   for(; i < mme->num_pages; i++) {
     /* TODO 
        Check if i-th virtual address page is a valid address 
@@ -375,7 +372,7 @@ static mapid_t syscall_mmap (int fd, void *addr)
        The use of utok_addr here is probably wrong, I need a way to
        check if it is a valid address without caring if it is mapped.
     */
-    if (utok_addr ((char *)addr + i * PGSIZE) == NULL ||
+    if (!is_user_vaddr ((char *)addr + i * PGSIZE)||
         supp_page_lookup (spt, (char *)addr + i * PGSIZE) != NULL) {
       lock_release (&spt->lock);
       free (mme);
@@ -383,19 +380,19 @@ static mapid_t syscall_mmap (int fd, void *addr)
       return MAP_FAILED;
     }
   }
-  i = 0;
-  for(; i < mme->num_pages; i++) {
-    supp_page_insert (spt, (char *)addr + i * PGSIZE,
-                      SUPP_PAGE_MMAP, false);
-  }
-  lock_release (&spt->lock);
-
-  file_reopen (mme->fp);
 
   lock_acquire (&mmap_lock);
   mme->map_id = next_mmap_id;
   next_mmap_id++;
   lock_release (&mmap_lock);  
+  
+  i = 0;
+  for(; i < mme->num_pages; i++) {
+    supp_page_insert (spt, (char *)addr + i * PGSIZE,
+                      SUPP_PAGE_MMAP, mme, false);
+  }
+
+  file_reopen (mme->fp);
 
   mmap_table_insert (thread_current ()->mmt, mme);
   return mme->map_id;
@@ -405,9 +402,17 @@ static void syscall_munmap (mapid_t mid)
 {
   struct mmap_entry *mme = mmap_table_lookup (thread_current ()->mmt, mid);
 
-  // Walk PT.  Write contents back to file && clear entries
-  // Clear all entries from SPT
+  unsigned i = 0;
+  for (; i < mme->num_pages; i++) {
+    void *uaddr = (char *) mme->uaddr + i * PGSIZE;
+    struct supp_page *sp = supp_page_lookup (thread_current ()->spt, uaddr); 
+    if (sp->fte != NULL) {
+      frame_free (sp->fte);
+    }
+    supp_page_remove (thread_current ()->spt, uaddr);
+  }
 
+  file_close (mme->fp);
   mmap_table_remove (thread_current ()->mmt, mid);
 }
 

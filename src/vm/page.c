@@ -54,7 +54,7 @@ supp_page_lookup (struct supp_page_table *spt, void *uaddr)
 /* Add a new entry to the supplemental page table. */
 struct supp_page *
 supp_page_insert (struct supp_page_table *spt, void *uaddr,
-                  enum supp_page_source src, bool ro)
+                  enum supp_page_source src, void *aux, bool ro)
 {
   struct supp_page *spe = malloc (sizeof (struct supp_page));
   if (spe == NULL)
@@ -65,10 +65,7 @@ supp_page_insert (struct supp_page_table *spt, void *uaddr,
   spe->ro = ro;
   spe->fte = NULL;
   spe->thread = thread_current ();
-  
-  /* spe->aux = malloc(sizeof(uint32_t));
-  if(spe->aux == NULL)
-    PANIC ("Failed to malloc aux pointer in supplemental page entry"); */
+  spe->aux = aux;
 
   lock_acquire (&spt->lock);
   hash_insert (&spt->hash_table, &spe->hash_elem);
@@ -84,7 +81,7 @@ supp_page_remove (struct supp_page_table *spt, void *uaddr)
   struct supp_page dummy_spe;
   dummy_spe.uaddr = pg_round_down (uaddr);
 
-  struct supp_page *deleted = hash_delete (&spt->hash_table,
+  struct hash_elem *deleted = hash_delete (&spt->hash_table,
                                            &dummy_spe.hash_elem);
   ASSERT (deleted != NULL);
 }
@@ -99,7 +96,7 @@ supp_page_alloc (struct supp_page *spe)
 
   spe->fte = frame_create ();
   list_push_back (&spe->fte->users, &spe->list_elem);
-  frame_alloc (spe->fte, spe->src);
+  frame_alloc (spe->fte, spe->aux, spe->uaddr, spe->src);
   
   pagedir_set_page (spe->thread->pagedir, spe->uaddr,
                     spe->fte->paddr, !spe->ro);

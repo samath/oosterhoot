@@ -24,7 +24,7 @@ struct frame
 void frame_init (void);
 struct frame *frame_create (void);
 void frame_free (struct frame *fte);
-void frame_alloc (struct frame *fte, uint32_t *aux, enum supp_page_source src);
+void frame_alloc (struct frame *fte, void *aux, void *uaddr, enum supp_page_source src);
 void frame_dealloc (struct frame *fte);
 
 #endif

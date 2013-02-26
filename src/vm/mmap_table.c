@@ -1,6 +1,8 @@
 #include "vm/page.h"
 #include "threads/malloc.h"
-
+#include "filesys/file.h"
+#include "threads/vaddr.h"
+#include "vm/frame.h"
 
 /* HASH TABLE HELPERS */
 
@@ -18,12 +20,23 @@ static bool mmap_less (const struct hash_elem *a,
 
 static void mmap_action_dispose (struct hash_elem *e, void *aux UNUSED)
 {
+  struct mmap_entry *mme = hash_entry (e, struct mmap_entry, hash_elem);
   struct supp_page_table *spt = thread_current ()->spt;
-  /* TODO
-     this should have the same behavior as calling MUNMAP
-     on each element in the mmap_table; see the related comment in
-     syscall_munmap.
-  */
+
+  unsigned i = 0;
+  for(; i < mme->num_pages; i++) {
+    void *uaddr = (char *) mme->uaddr + i * PGSIZE;
+    struct supp_page *sp = supp_page_lookup (spt, uaddr);
+    if (sp->fte != NULL) {
+      frame_free (sp->fte);
+    }
+    supp_page_remove (spt, uaddr);
+  }
+  
+  // TODO is this necessary? causes issues now
+  //file_close (mme->fp);
+  hash_delete (&thread_current ()->mmt->table, e);
+
 }
 
 /* END OF HASH TABLE HLEPERS */
@@ -67,14 +80,17 @@ void mmap_table_remove (struct mmap_table *mmt, mapid_t map_id)
   hash_delete (&mmt->table, &result->hash_elem);
 }
 
-
-void mmap_table_dispose () 
+void mmap_table_unmap (struct mmap_table *mmt, mapid_t map_id) 
 {
-  hash_destroy (&thread_current ()->mmt->table, mmap_action_dispose);
+  struct mmap_entry *mme = mmap_table_lookup (mmt, map_id);
+  if (mme == NULL) return;
+  mmap_action_dispose (&mme->hash_elem, NULL);
 }
 
 
-
-
-
+void mmap_table_destroy () 
+{
+  hash_destroy (&thread_current ()->mmt->table, mmap_action_dispose);
+  free (thread_current ()->mmt);
+}
 

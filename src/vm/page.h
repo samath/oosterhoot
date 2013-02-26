@@ -18,7 +18,7 @@ struct supp_page
   {
     uint32_t *uaddr;            // Base user virtual address
    
-    uint32_t *aux;              // An auxiliary pointer to keep track of a
+    void *aux;                  // Auxiliary data to keep track of a
                                 // frame's location in either swap space or
                                 // the mmap table
 
@@ -45,7 +45,7 @@ struct supp_page_table *supp_page_table_create (void);
 struct supp_page *supp_page_lookup (struct supp_page_table *spt,
   void *uaddr);
 struct supp_page *supp_page_insert (struct supp_page_table *spt,
-  void *uaddr, enum supp_page_source src, bool ro); 
+  void *uaddr, enum supp_page_source src, void *aux, bool ro); 
 void supp_page_remove (struct supp_page_table *spt,
   void *uaddr);
 void supp_page_alloc (struct supp_page *spe);

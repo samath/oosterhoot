@@ -164,10 +164,11 @@ page_fault (struct intr_frame *f)
        be allowed stack memory. So Sam, only allocate a new page
        if the fault address appears to be a valid stack growth? */
 
-    bool stack_growth = true;
-    if (stack_growth) {
+    char *esp = f->esp;
+    if (fault_addr >= esp || fault_addr == esp - 4 
+                          || fault_addr == esp - 32) {
       struct supp_page *spe = supp_page_insert (
-        t->spt, fault_addr, SUPP_PAGE_ZERO, false);
+        t->spt, fault_addr, SUPP_PAGE_ZERO, 0, false);
       supp_page_alloc (spe);
       return;
     }

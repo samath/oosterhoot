@@ -252,7 +252,7 @@ process_cleanup (int exit_code)
   /* Close all files opened by this process */
   file_close (t->pinfo->fp);
 
-  mmap_table_dispose ();
+  mmap_table_destroy ();
 
   lock_release (&cleanup_lock);
 }
@@ -630,7 +630,7 @@ setup_stack (void **esp, const char *cmd, int arg_len, int argc)
   /* TODO: Pin the frame created here to prevent eviction */
   struct supp_page *spe = supp_page_insert (
     thread_current ()->spt, ((uint8_t *) PHYS_BASE) - PGSIZE,
-    SUPP_PAGE_ZERO, false);
+    SUPP_PAGE_ZERO, 0, false);
   supp_page_alloc (spe);
   uint32_t *kpage = spe->fte->paddr;
 #else
