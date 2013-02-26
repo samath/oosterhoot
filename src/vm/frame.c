@@ -53,7 +53,8 @@ frame_free (struct frame *fte)
    Also fills in the physical frame with the appropriate data, as
    specified by source. */
 void
-frame_alloc (struct frame *fte, void *aux, void *uaddr, enum supp_page_source src)
+frame_alloc (struct frame *fte, void *aux, void *uaddr, 
+             enum supp_page_source src)
 {
   ASSERT (fte->paddr == NULL);
   fte->paddr = palloc_get_page (PAL_USER);

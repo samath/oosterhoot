@@ -366,12 +366,6 @@ static mapid_t syscall_mmap (int fd, void *addr)
   struct supp_page_table *spt = thread_current ()->spt;
   unsigned i = 0;
   for(; i < mme->num_pages; i++) {
-    /* TODO 
-       Check if i-th virtual address page is a valid address 
-       and if it is already in use in the SPT.
-       The use of utok_addr here is probably wrong, I need a way to
-       check if it is a valid address without caring if it is mapped.
-    */
     if (!is_user_vaddr ((char *)addr + i * PGSIZE)||
         supp_page_lookup (spt, (char *)addr + i * PGSIZE) != NULL) {
       lock_release (&spt->lock);
@@ -412,7 +406,7 @@ static void syscall_munmap (mapid_t mid)
     supp_page_remove (thread_current ()->spt, uaddr);
   }
 
-  file_close (mme->fp);
+  //file_close (mme->fp);
   mmap_table_remove (thread_current ()->mmt, mid);
 }
 

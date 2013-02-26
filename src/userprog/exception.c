@@ -165,8 +165,8 @@ page_fault (struct intr_frame *f)
        if the fault address appears to be a valid stack growth? */
 
     char *esp = f->esp;
-    if (fault_addr >= esp || fault_addr == esp - 4 
-                          || fault_addr == esp - 32) {
+    if (fault_addr >= (void *)esp || fault_addr == (void *)(esp - 4)
+                                  || fault_addr == (void *)(esp - 32)) {
       struct supp_page *spe = supp_page_insert (
         t->spt, fault_addr, SUPP_PAGE_ZERO, 0, false);
       supp_page_alloc (spe);
@@ -176,6 +176,7 @@ page_fault (struct intr_frame *f)
     /* Otherwise, the page entry exists, so bring it in */
     if (!spe->ro) 
       supp_page_alloc (spe);
+    return;
   }
 
 #else
