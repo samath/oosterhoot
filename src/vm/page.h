@@ -18,6 +18,10 @@ struct supp_page
   {
     uint32_t *uaddr;            // Base user virtual address
    
+    uint32_t *aux;              // An auxiliary pointer to keep track of a
+                                // frame's location in either swap space or
+                                // the mmap table
+
     bool ro;                    // Read Only    TODO: Bit flags
 
     enum supp_page_source src;  // Whether this page is in swap, mmaped, or

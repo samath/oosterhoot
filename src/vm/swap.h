@@ -16,8 +16,8 @@ struct swap_table
   };
 
 void swap_init (void);
-void swap_in (uint8_t *dest_addr, block_sector_t *disk_block);
-void swap_out (uint8_t *src_addr, block_sector_t *disk_block);
+void swap_in (uint32_t *dest_addr, block_sector_t *disk_block);
+void swap_out (uint32_t *src_addr, block_sector_t *disk_block);
 
 void swap_delete(block_sector_t *disk_block);
 

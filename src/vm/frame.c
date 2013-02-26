@@ -1,5 +1,6 @@
 #include "vm/frame.h"
 #include "vm/page.h"
+#include "vm/swap.h"
 #include "lib/kernel/list.h"
 #include "lib/string.h"
 #include "threads/malloc.h"
@@ -36,7 +37,7 @@ frame_create (void)
    Also fills in the physical frame with the appropriate data, as
    specified by source. */
 void
-frame_alloc (struct frame *fte, enum supp_page_source src)
+frame_alloc (struct frame *fte, uint32_t *aux, enum supp_page_source src)
 {
   ASSERT (fte->paddr == NULL);
   fte->paddr = palloc_get_page (PAL_USER|PAL_ZERO);
@@ -53,8 +54,9 @@ frame_alloc (struct frame *fte, enum supp_page_source src)
     case SUPP_PAGE_MMAP:
       /* TODO */
       break;
+    //Requested memory is in swap space. Swap into page.
     case SUPP_PAGE_SWAP:
-      /* TODO */
+      swap_in (fte->paddr, (block_sector_t *)aux);
       break;
     default:
       PANIC ("Invalid frame source");

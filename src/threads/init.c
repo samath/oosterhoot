@@ -34,7 +34,7 @@
 
 #ifdef VM
 #include "vm/frame.h"
-#include "vm/swap.c"
+#include "vm/swap.h"
 #endif
 
 #ifdef FILESYS

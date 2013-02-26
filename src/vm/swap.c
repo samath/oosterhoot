@@ -1,4 +1,6 @@
 #include "vm/swap.h"
+#include "threads/malloc.h"
+#include "threads/vaddr.h"
 
 struct swap_table *st;
 
@@ -9,8 +11,10 @@ swap_init (void)
 {
   block_sector_t num_sectors;
 
-  //TODO check all mallocs!
   st = malloc(sizeof(struct swap_table));
+  if(st == NULL)
+    PANIC ("Failed to malloc swap table during swap initialization");
+
   lock_init(&st->swap_table_lock);
 
   //Get the block that contains the swap space
@@ -19,7 +23,7 @@ swap_init (void)
     num_sectors = block_size(st->swap_block);
   else
   {
-    printf("swap_block = NULL in swap_init in swap.c\n");
+    PANIC ("Failed to get block swap space during swap initialization");
   }
   
   //bitmap_create declared in bitmap.h. Allocates correct size.
@@ -27,7 +31,7 @@ swap_init (void)
   if(st->map == NULL)
   {
     free(st);
-    printf("st->map = NULL in swap_init in swap.c\n");
+    PANIC ("Failed to create swap bitmap during swap initialization");
   }
 }
 
@@ -35,7 +39,7 @@ swap_init (void)
 //memory. This will be read into the swap space. The disk_block pointer
 //will get set to the location at which the memory was stored.
 void
-swap_out (uint8_t *src_addr, block_sector_t *disk_block)
+swap_out (uint32_t *src_addr, block_sector_t *disk_block)
 {
   lock_acquire(&st->swap_table_lock);
   //Find available space on disk in the swap space
@@ -66,7 +70,7 @@ swap_out (uint8_t *src_addr, block_sector_t *disk_block)
 //previously called, and disk_block must be the same disk_block from swap_out.
 //dest_addr should point to a page worth of memory to swap data into.
 void
-swap_in (uint8_t *dest_addr, block_sector_t *disk_block)
+swap_in (uint32_t *dest_addr, block_sector_t *disk_block)
 {
   int i = 0;
   block_sector_t block_offset = *disk_block;

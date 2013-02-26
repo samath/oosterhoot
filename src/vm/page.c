@@ -65,6 +65,11 @@ supp_page_insert (struct supp_page_table *spt, void *uaddr,
   spe->ro = ro;
   spe->thread = thread_current ();
   spe->fte = NULL;
+  
+  //Create a pointer to auxiliary data to help locate frames
+  spe->aux = malloc(sizeof(uint32_t));
+  if(spe->aux == NULL)
+    PANIC ("Failed to malloc aux pointer in supplemental page entry");
 
   lock_acquire (&spt->lock);
   hash_insert (&spt->hash_table, &spe->hash_elem);
@@ -81,7 +86,8 @@ supp_page_alloc (struct supp_page *spe)
   ASSERT (spe->fte == NULL);
 
   spe->fte = frame_create ();
-  frame_alloc (spe->fte, spe->src);
+
+  frame_alloc (spe->fte, spe->aux, spe->src);
   
   pagedir_set_page (spe->thread->pagedir, spe->uaddr,
                     spe->fte->paddr, !spe->ro);
