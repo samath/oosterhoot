@@ -2,6 +2,7 @@
 #include "lib/string.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
+#include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "userprog/pagedir.h"
 #include "vm/frame.h"
@@ -38,7 +39,7 @@ frame_create (enum frame_source src, void *aux, bool ro)
   fte->ro = ro;
 
   list_init (&fte->users); 
-
+  lock_init (&fte->lock);
   return fte;
 }
 
@@ -63,6 +64,9 @@ void
 frame_alloc (struct frame *fte, void *uaddr)
 {
   ASSERT (fte->paddr == NULL);
+
+  lock_acquire(&fte->lock);
+  
   fte->paddr = palloc_get_page (PAL_USER);
 
   /* Try to get page. If out of memory, evict a page and try again */
@@ -100,6 +104,8 @@ frame_alloc (struct frame *fte, void *uaddr)
   lock_acquire (&frame_lock);
   list_push_back (&frame_table, &fte->elem);
   lock_release (&frame_lock);
+  lock_release (&fte->lock);
+
 }
 
 
@@ -110,12 +116,14 @@ frame_alloc (struct frame *fte, void *uaddr)
 void
 frame_dealloc (struct frame *fte)
 {
+  lock_acquire(&fte->lock);
+
   struct list_elem *e = list_begin (&fte->users);
   for (; e != list_end (&fte->users); e = list_remove (e)) {
     struct supp_page *spe = list_entry (e, struct supp_page, list_elem);
 
     /* Write to mmapped file if necessary */
-    if (fte->src == FRAME_MMAP &&
+    if (fte->src == FRAME_MMAP && !fte->ro &&
         pagedir_is_dirty (spe->thread->pagedir, spe->uaddr)) {
       struct mmap_entry *mme = (struct mmap_entry *) fte->aux;
       unsigned page_num = 
@@ -124,30 +132,46 @@ frame_dealloc (struct frame *fte)
           PGSIZE - mme->zero_bytes : PGSIZE;
       file_write_at (mme->fp, spe->uaddr, bytes, page_num * PGSIZE);
     }
+    /* Write to swap space */
+    else if (!fte->ro && pagedir_is_dirty (spe->thread->pagedir, spe->uaddr))
+    {
+      fte->src = FRAME_SWAP;
+      swap_out(fte->paddr, (uint32_t *)fte->aux);
+    }
+    /* In all other cases, no need to write memory back to disk. */
 
     pagedir_clear_page (spe->thread->pagedir, spe->uaddr);
     spe->fte = NULL;
+    lock_release(&fte->lock);
   }
 
   list_remove (&fte->elem);
   palloc_free_page (fte->paddr);
 }
 
+/* Runs the eviction process, looping through all the frame entries searching
+   for a frame that has not been accessed recently and deallocating it, making
+   room for a new page to be brought into memory. */
 void
 eviction(void)
 {
+  /* Eviction should never be called if the frame_table is empty */
+  ASSERT(!list_empty(&frame_table));
+
   if(clock_hand == NULL)
     clock_hand = list_begin(&frame_table);
 
   struct list_elem *e;
   struct supp_page *spe;
+  struct frame *fte;
+  bool dealloc = true;
 
   /* Keep looping through frames until we find one to evict */
   while(true)
   {
-    struct frame *fte = list_entry(clock_hand, struct frame, elem);
+    fte = list_entry(clock_hand, struct frame, elem);
     e = list_begin(&fte->users);
-    bool dealloc = true;
+    dealloc = true;
     for (; e != list_end (&fte->users); e = list_next (e))
     {
       spe = list_entry (e, struct supp_page, list_elem);

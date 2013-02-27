@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "lib/kernel/list.h"
 #include "vm/page.h"
+#include "threads/synch.h"
 
 enum frame_source
   {
@@ -28,6 +29,9 @@ struct frame
 
     bool ro;                    // Read-only
     bool pinned;                // Frame should not be evicted
+
+   struct lock lock;            // Protects frame entry during allocation and
+                                // eviction process.
   };
 
 
