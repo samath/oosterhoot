@@ -383,7 +383,7 @@ static mapid_t syscall_mmap (int fd, void *addr)
   i = 0;
   for(; i < mme->num_pages; i++) {
     supp_page_insert (spt, (char *)addr + i * PGSIZE,
-                      SUPP_PAGE_MMAP, mme, false);
+                      FRAME_MMAP, mme, false);
   }
 
   file_reopen (mme->fp);

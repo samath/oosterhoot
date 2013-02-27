@@ -54,18 +54,16 @@ supp_page_lookup (struct supp_page_table *spt, void *uaddr)
 /* Add a new entry to the supplemental page table. */
 struct supp_page *
 supp_page_insert (struct supp_page_table *spt, void *uaddr,
-                  enum supp_page_source src, void *aux, bool ro)
+                  enum frame_source src, void *aux, bool ro)
 {
   struct supp_page *spe = malloc (sizeof (struct supp_page));
   if (spe == NULL)
     PANIC ("Supplemental page entry could not be allocated");
 
   spe->uaddr = pg_round_down (uaddr);
-  spe->src = src;
-  spe->ro = ro;
-  spe->fte = NULL;
+  spe->fte = frame_create (src, aux, ro);
+  list_push_back (&spe->fte->users, &spe->list_elem);
   spe->thread = thread_current ();
-  spe->aux = aux;
 
   lock_acquire (&spt->lock);
   hash_insert (&spt->hash_table, &spe->hash_elem);
@@ -81,8 +79,11 @@ supp_page_remove (struct supp_page_table *spt, void *uaddr)
   struct supp_page dummy_spe;
   dummy_spe.uaddr = pg_round_down (uaddr);
 
-  struct hash_elem *deleted = hash_delete (&spt->hash_table,
+  lock_acquire (&spt->lock);
+  struct supp_page *deleted = hash_delete (&spt->hash_table,
                                            &dummy_spe.hash_elem);
+  lock_release (&spt->lock);
+
   ASSERT (deleted != NULL);
 }
 
@@ -92,14 +93,9 @@ supp_page_remove (struct supp_page_table *spt, void *uaddr)
 void
 supp_page_alloc (struct supp_page *spe)
 {
-  ASSERT (spe->fte == NULL);
-
-  spe->fte = frame_create ();
-  list_push_back (&spe->fte->users, &spe->list_elem);
-  frame_alloc (spe->fte, spe->aux, spe->uaddr, spe->src);
-  
+  frame_alloc (spe->fte, spe->uaddr);
   pagedir_set_page (spe->thread->pagedir, spe->uaddr,
-                    spe->fte->paddr, !spe->ro);
+                    spe->fte->paddr, !spe->fte->ro);
 }
 
 
@@ -108,10 +104,6 @@ supp_page_alloc (struct supp_page *spe)
 void
 supp_page_dealloc (struct supp_page *spe)
 {
-  if (spe->fte == NULL) return;
-
-  list_remove (&spe->list_elem);
-  spe->fte = NULL;
-
+  /* Deallocate the frame */
   pagedir_clear_page (spe->thread->pagedir, spe->uaddr);
 }

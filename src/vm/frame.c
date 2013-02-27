@@ -23,13 +23,17 @@ frame_init (void)
 
 /* Initilize a new frame table entry. */
 struct frame *
-frame_create (void)
+frame_create (enum frame_source src, void *aux, bool ro)
 {
   struct frame *fte = malloc (sizeof (struct frame));
   if (fte == NULL)
     PANIC ("Frame could not be allocated");
 
   fte->paddr = NULL;
+  fte->src = src;
+  fte->aux = aux;
+  fte->ro = ro;
+
   list_init (&fte->users); 
 
   return fte;
@@ -38,12 +42,12 @@ frame_create (void)
 void
 frame_free (struct frame *fte)
 {
-  ASSERT (fte->paddr != NULL);
-
-  lock_acquire (&frame_lock);
-  frame_dealloc (fte);
-  list_remove (&fte->elem);
-  lock_release (&frame_lock);
+  if (fte->paddr != NULL) {
+    lock_acquire (&frame_lock);
+    frame_dealloc (fte);
+    list_remove (&fte->elem);
+    lock_release (&frame_lock);
+  }
 
   free (fte);
 }
@@ -53,8 +57,7 @@ frame_free (struct frame *fte)
    Also fills in the physical frame with the appropriate data, as
    specified by source. */
 void
-frame_alloc (struct frame *fte, void *aux, void *uaddr, 
-             enum supp_page_source src)
+frame_alloc (struct frame *fte, void *uaddr)
 {
   ASSERT (fte->paddr == NULL);
   fte->paddr = palloc_get_page (PAL_USER);
@@ -63,15 +66,15 @@ frame_alloc (struct frame *fte, void *aux, void *uaddr,
   if (fte->paddr == NULL)
     PANIC ("Unable to allocate a new frame for this entry");
 
-  /* Fill in the physical memory for the frame with the data */
   struct mmap_entry *mme;
   
-  switch (src) {
-    case SUPP_PAGE_ZERO:
+  switch (fte->src) {
+    case FRAME_ZERO:
       memset (fte->paddr, 0, PGSIZE);
       break;
-    case SUPP_PAGE_MMAP:
-      mme = (struct mmap_entry *) aux;
+    case FRAME_MMAP:
+      /* Fill in the physical memory for the frame with the data */
+      mme = (struct mmap_entry *) fte->aux;
       unsigned offset = (unsigned) uaddr - (unsigned) mme->uaddr;
       
       if (offset / PGSIZE < mme->num_pages - 1 || mme->zero_bytes == 0) {
@@ -82,9 +85,8 @@ frame_alloc (struct frame *fte, void *aux, void *uaddr,
                      0, mme->zero_bytes);
       }
       break;
-    //Requested memory is in swap space. Swap into page.
-    case SUPP_PAGE_SWAP:
-      swap_in (fte->paddr, (block_sector_t *)aux);
+    case FRAME_SWAP:
+      swap_in (fte->paddr, (block_sector_t *) fte->aux);
       break;
     default:
       PANIC ("Invalid frame source");
@@ -96,10 +98,9 @@ frame_alloc (struct frame *fte, void *aux, void *uaddr,
 }
 
 
-/* Returns the frame's physical memory to the user pool, and
-   removes it from all supplemental page table entries.
+/* Returns the frame's physical memory to the user pool.
    If the frame was mmapped, writes its data back to disk.
-   Finally, removes the frame from the main fram table.
+   Finally, removes the frame from the main frame table.
    This assumes the frame table has been locked already. */
 void
 frame_dealloc (struct frame *fte)
@@ -108,9 +109,10 @@ frame_dealloc (struct frame *fte)
   for (; e != list_end (&fte->users); e = list_remove (e)) {
     struct supp_page *spe = list_entry (e, struct supp_page, list_elem);
 
-    if (spe->src == SUPP_PAGE_MMAP
-            && pagedir_is_dirty (thread_current ()->pagedir, spe->uaddr)) {
-      struct mmap_entry *mme = (struct mmap_entry *) spe->aux;
+    /* Write to mmapped file if necessary */
+    if (fte->src == FRAME_MMAP &&
+        pagedir_is_dirty (spe->thread->pagedir, spe->uaddr)) {
+      struct mmap_entry *mme = (struct mmap_entry *) fte->aux;
       unsigned page_num = 
           ((unsigned) spe->uaddr - (unsigned) mme->uaddr) / PGSIZE;
       unsigned bytes = (page_num == mme->num_pages - 1) ? 
@@ -119,7 +121,7 @@ frame_dealloc (struct frame *fte)
     }
 
     pagedir_clear_page (spe->thread->pagedir, spe->uaddr);
-    spe->fte = NULL; 
+    spe->fte = NULL;
   }
 
   list_remove (&fte->elem);
