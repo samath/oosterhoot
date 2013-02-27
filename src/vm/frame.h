@@ -27,6 +27,7 @@ struct frame
                                 // location in swap space or the mmap table.
 
     bool ro;                    // Read-only
+    bool pinned;                // Frame should not be evicted
   };
 
 
@@ -35,5 +36,7 @@ struct frame *frame_create (enum frame_source src, void *aux, bool ro);
 void frame_free (struct frame *fte);
 void frame_alloc (struct frame *fte, void *uaddr);
 void frame_dealloc (struct frame *fte);
+
+void eviction (void);
 
 #endif

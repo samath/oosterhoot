@@ -13,11 +13,14 @@
 static struct list frame_table;
 static struct lock frame_lock;
 
+struct list_elem *clock_hand;
+
 void
 frame_init (void)
 {
   list_init (&frame_table); 
   lock_init (&frame_lock);
+  clock_hand = NULL;
 }
 
 
@@ -62,9 +65,11 @@ frame_alloc (struct frame *fte, void *uaddr)
   ASSERT (fte->paddr == NULL);
   fte->paddr = palloc_get_page (PAL_USER);
 
-  /* TODO: implement eviction instead of panic */
-  if (fte->paddr == NULL)
-    PANIC ("Unable to allocate a new frame for this entry");
+  /* Try to get page. If out of memory, evict a page and try again */
+  while ((fte->paddr = palloc_get_page (PAL_USER)) == NULL)
+  {
+   eviction();
+  }
 
   struct mmap_entry *mme;
   
@@ -128,4 +133,43 @@ frame_dealloc (struct frame *fte)
   palloc_free_page (fte->paddr);
 }
 
+void
+eviction(void)
+{
+  if(clock_hand == NULL)
+    clock_hand = list_begin(&frame_table);
 
+  struct list_elem *e;
+  struct supp_page *spe;
+
+  /* Keep looping through frames until we find one to evict */
+  while(true)
+  {
+    struct frame *fte = list_entry(clock_hand, struct frame, elem);
+    e = list_begin(&fte->users);
+    bool dealloc = true;
+    for (; e != list_end (&fte->users); e = list_next (e))
+    {
+      spe = list_entry (e, struct supp_page, list_elem);
+      /* If page has been accessed, do not dealloc frame. */
+      if(pagedir_is_accessed(spe->thread->pagedir, spe->uaddr))
+      {
+        dealloc = false;
+        pagedir_set_accessed(spe->thread->pagedir, spe->uaddr, false);
+      }
+    }
+
+    /* Move clock hand to next frame in the list */
+    if(clock_hand != list_end(&frame_table))
+      clock_hand = list_next(clock_hand);
+    else
+      clock_hand = list_begin(&frame_table);
+
+
+    if(dealloc && !fte->pinned)
+    {
+      frame_dealloc(fte);
+      break;
+    }
+  }
+}
