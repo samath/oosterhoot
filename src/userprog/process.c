@@ -154,9 +154,7 @@ start_process (void *pinfo_)
    child of the calling process, or if process_wait() has already
    been successfully called for the given TID, returns -1
    immediately, without waiting.
-
-   This function will be implemented in problem 2-2.  For now, it
-   does nothing. */
+*/
 int
 process_wait (tid_t child_tid) 
 {
@@ -499,7 +497,6 @@ load (struct pinfo *pinfo, void (**eip) (void), void **esp)
   /* Set up stack. */
   if (!setup_stack (esp, cmd, arg_len, argc))
     goto done;
-   
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;

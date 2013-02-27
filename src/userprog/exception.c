@@ -185,7 +185,6 @@ page_fault (struct intr_frame *f)
           user ? "user" : "kernel");
 #endif
 
-
   syscall_release_files ();
   process_cleanup (-1);
   thread_exit ();
