@@ -33,8 +33,7 @@ static void mmap_action_dispose (struct hash_elem *e, void *aux UNUSED)
     supp_page_remove (spt, uaddr);
   }
   
-  // TODO is this necessary? causes issues now
-  //file_close (mme->fp);
+  close_fd (mme->fm, (int) mme->map_id);
   hash_delete (&thread_current ()->mmt->table, e);
 
 }

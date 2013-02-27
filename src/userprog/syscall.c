@@ -368,25 +368,23 @@ static mapid_t syscall_mmap (int fd, void *addr)
   for(; i < mme->num_pages; i++) {
     if (!is_user_vaddr ((char *)addr + i * PGSIZE)||
         supp_page_lookup (spt, (char *)addr + i * PGSIZE) != NULL) {
-      lock_release (&spt->lock);
       free (mme);
-      syscall_exit (-1);
       return MAP_FAILED;
     }
   }
 
-  lock_acquire (&mmap_lock);
-  mme->map_id = next_mmap_id;
-  next_mmap_id++;
-  lock_release (&mmap_lock);  
-  
+  lock_acquire (&filesys_lock);
+  file_reopen (mme->fp);
+  lock_release (&filesys_lock);
+ 
+  mme->map_id = (mapid_t) get_new_fd (fm, mme->fp);
+
   i = 0;
   for(; i < mme->num_pages; i++) {
     supp_page_insert (spt, (char *)addr + i * PGSIZE,
                       FRAME_MMAP, mme, false);
   }
 
-  file_reopen (mme->fp);
 
   mmap_table_insert (thread_current ()->mmt, mme);
   return mme->map_id;
@@ -406,7 +404,7 @@ static void syscall_munmap (mapid_t mid)
     supp_page_remove (thread_current ()->spt, uaddr);
   }
 
-  //file_close (mme->fp);
+  close_fd (fm, (int) mme->map_id);
   mmap_table_remove (thread_current ()->mmt, mid);
 }
 
@@ -423,7 +421,7 @@ static struct mmap_entry * mmap_entry_from_fd (int fd)
   struct mmap_entry *mme = malloc (sizeof(struct mmap_entry));
   if (mme == NULL) return NULL;
 
-  mme->fd = fd;
+  mme->fm = fm;
   mme->fp = fwl.fp;
   mme->num_pages = 1 + (filesize - 1) / PGSIZE;
   mme->zero_bytes = mme->num_pages * PGSIZE - filesize;

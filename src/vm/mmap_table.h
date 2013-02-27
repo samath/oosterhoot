@@ -11,9 +11,9 @@ struct mmap_table
 
 struct mmap_entry
 {
-  mapid_t map_id;    // Map id assigned by an mmap call.
-  int fd;             // File descriptor
+  mapid_t map_id;     // Map id assigned by an mmap call.
   struct file *fp;
+  struct file_map *fm;
 
   void *uaddr;        /* User-provided virtual address containing 
                          start of file */

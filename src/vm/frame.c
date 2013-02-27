@@ -141,7 +141,7 @@ frame_dealloc (struct frame *fte)
     /* In all other cases, no need to write memory back to disk. */
 
     pagedir_clear_page (spe->thread->pagedir, spe->uaddr);
-    spe->fte = NULL;
+    spe->fte = frame_create (fte->src, fte->aux, fte->ro);
     lock_release(&fte->lock);
   }
 
