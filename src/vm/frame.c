@@ -9,6 +9,7 @@
 #include "vm/page.h"
 #include "vm/swap.h"
 #include "vm/mmap_table.h"
+#include "userprog/file-map.h"
 #include "filesys/file.h"
 
 static struct list frame_table;
@@ -83,7 +84,9 @@ frame_alloc (struct frame *fte, void *uaddr)
       /* Fill in the physical memory for the frame with the data */
       mme = (struct mmap_entry *) fte->aux;
       unsigned offset = (unsigned) uaddr - (unsigned) mme->uaddr;
-      
+
+      struct file_with_lock fwl = fwl_from_fd (mme->fm, (int) mme->map_id);
+      if (fwl.lock) lock_acquire (fwl.lock);
       if (offset / PGSIZE < mme->num_pages - 1 || mme->zero_bytes == 0) {
         file_read_at (mme->fp, fte->paddr, PGSIZE, offset);
       } else {
@@ -91,6 +94,8 @@ frame_alloc (struct frame *fte, void *uaddr)
         memset ((char *)fte->paddr + PGSIZE - mme->zero_bytes, 
                      0, mme->zero_bytes);
       }
+      if (fwl.lock) lock_release (fwl.lock);
+
       break;
     case FRAME_SWAP:
       swap_in (fte->paddr, (block_sector_t *) fte->aux);
@@ -128,7 +133,11 @@ frame_dealloc (struct frame *fte)
           ((unsigned) spe->uaddr - (unsigned) mme->uaddr) / PGSIZE;
       unsigned bytes = (page_num == mme->num_pages - 1) ? 
           PGSIZE - mme->zero_bytes : PGSIZE;
+      
+      struct file_with_lock fwl = fwl_from_fd (mme->fm, (int) mme->map_id);
+      if (fwl.lock) lock_acquire (fwl.lock);
       file_write_at (mme->fp, spe->uaddr, bytes, page_num * PGSIZE);
+      if (fwl.lock) lock_release (fwl.lock);
     }
     /* Write to swap space */
     else if (!fte->ro && pagedir_is_dirty (spe->thread->pagedir, spe->uaddr))

@@ -256,7 +256,7 @@ static int syscall_open (const char *file)
 {
   lock_acquire (&filesys_lock);
   struct file* fp = filesys_open (file);
-  int retval = (fp) ? get_new_fd (fm, fp) : -1;
+  int retval = (fp) ? get_new_fd (fm, fp, FM_MODE_FD) : -1;
   lock_release (&filesys_lock);
   return retval;
 }
@@ -264,7 +264,7 @@ static int syscall_open (const char *file)
 static int syscall_filesize (int fd)
 { 
   struct file_with_lock fwl = fwl_from_fd (fm, fd);
-  if (fwl.lock == NULL) return -1;
+  if (fwl.lock == NULL || fwl.mode == FM_MODE_MMAP) return -1;
   lock_acquire (fwl.lock);
   int retval = file_length (fwl.fp);
   lock_release (fwl.lock);
@@ -283,7 +283,7 @@ static int syscall_read (int fd, void *buffer, unsigned size)
   struct file_with_lock fwl = fwl_from_fd (fm, fd);
 
   int retval = -1;
-  if (fwl.fp) {
+  if (fwl.fp && fwl.mode == FM_MODE_FD) {
     lock_acquire (fwl.lock);
     retval = file_read (fwl.fp, buffer, size);
     lock_release (fwl.lock);
@@ -308,7 +308,7 @@ static int syscall_write (int fd, const void *buffer, unsigned size)
   struct file_with_lock fwl = fwl_from_fd (fm, fd);
 
   int retval = -1;
-  if (fwl.fp) {
+  if (fwl.fp && fwl.mode == FM_MODE_FD) {
     lock_acquire (fwl.lock);
     retval = file_write (fwl.fp, buffer, size);
     lock_release (fwl.lock);
@@ -320,7 +320,7 @@ static int syscall_write (int fd, const void *buffer, unsigned size)
 static void syscall_seek (int fd, unsigned position)
 {
   struct file_with_lock fwl = fwl_from_fd (fm, fd);
-  if (fwl.lock == NULL) {
+  if (fwl.lock == NULL || fwl.mode == FM_MODE_MMAP) {
     syscall_exit (-1);
     return;
   }
@@ -332,7 +332,7 @@ static void syscall_seek (int fd, unsigned position)
 static unsigned syscall_tell (int fd) 
 {
   struct file_with_lock fwl = fwl_from_fd (fm, fd);
-  if (fwl.lock == NULL) {
+  if (fwl.lock == NULL || fwl.mode == FM_MODE_MMAP) {
     syscall_exit (-1);
     return 1;
   }
@@ -371,7 +371,7 @@ static mapid_t syscall_mmap (int fd, void *addr)
   file_reopen (mme->fp);
   lock_release (&filesys_lock);
  
-  mme->map_id = (mapid_t) get_new_fd (fm, mme->fp);
+  mme->map_id = (mapid_t) get_new_fd (fm, mme->fp, FM_MODE_MMAP);
 
   i = 0;
   for(; i < mme->num_pages; i++) {
@@ -405,7 +405,7 @@ static void syscall_munmap (mapid_t mid)
 static struct mmap_entry * mmap_entry_from_fd (int fd)
 {
   struct file_with_lock fwl = fwl_from_fd (fm, fd);
-  if (fwl.fp == NULL) return NULL;
+  if (fwl.fp == NULL || fwl.mode == FM_MODE_MMAP) return NULL;
 
   lock_acquire (fwl.lock);
   int filesize = file_length (fwl.fp);

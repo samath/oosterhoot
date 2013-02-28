@@ -16,6 +16,7 @@ struct fdm_info {
   struct file *fp;
   tid_t thread_id;      /* Id of owning thread. */
   int fd;
+  enum fm_mode mode;
   struct fdm_info *next;
 };
 
@@ -26,7 +27,8 @@ struct file_map {
   struct lock file_map_lock;
 };
 
-static struct file_with_lock get_file_with_lock (struct fpm_info *fpm);
+static struct file_with_lock get_file_with_lock 
+        (struct fpm_info *fpm, enum fm_mode mode);
 static int hash (void *addr);
 static struct fdm_info* fdm_from_fd (struct file_map *fm, int fd);
 static struct fpm_info* fpm_from_fp (struct file_map *fm, struct file *fp);
@@ -37,9 +39,11 @@ static void free_fdm (struct file_map *fm, struct fdm_info *fdm);
 /* Convert an fpm into a struct containing a file and corresponding lock.
    If fpm == NULL (which represents a number of error conditions), 
    initialize all fields to NULL. */
-static struct file_with_lock get_file_with_lock (struct fpm_info *fpm) 
+static struct file_with_lock get_file_with_lock 
+      (struct fpm_info *fpm, enum fm_mode mode) 
 {
   struct file_with_lock fwl;
+  fwl.mode = mode;
   if (fpm) {
     fwl.fp = fpm->fp;
     fwl.lock = &(fpm->file_lock);
@@ -152,10 +156,17 @@ static struct file* fp_from_fd (struct file_map *fm, int fd)
 /* Return file and lock for a given file descriptor. */
 struct file_with_lock fwl_from_fd (struct file_map *fm, int fd) 
 {
+  if (fm == NULL) return get_file_with_lock (NULL, FM_MODE_FD);
   lock_acquire (&(fm->file_map_lock));
-  struct fpm_info *fpm  = fpm_from_fp(fm, fp_from_fd(fm, fd));
+  struct fdm_info *fdm = fdm_from_fd (fm, fd);
+  if (fdm == NULL) {
+    lock_release (&(fm->file_map_lock));
+    return get_file_with_lock (NULL, FM_MODE_FD);
+  }
+  enum fm_mode mode = fdm->mode;
+  struct fpm_info *fpm  = fpm_from_fp(fm, fdm->fp);
   lock_release (&(fm->file_map_lock));
-  return get_file_with_lock (fpm);
+  return get_file_with_lock (fpm, mode);
 }
 
 /* Finds the corresponding entry for fp in the fp_map.
@@ -163,7 +174,7 @@ struct file_with_lock fwl_from_fd (struct file_map *fm, int fd)
    Adds a new fdm_info to the fd_map.
    Returns the new file descriptor.
 */
-int get_new_fd (struct file_map *fm, struct file *fp) 
+int get_new_fd (struct file_map *fm, struct file *fp, enum fm_mode mode) 
 { 
   struct fdm_info * new_fdm = malloc(sizeof(struct fdm_info));
   if (new_fdm == NULL) return -1;
@@ -191,6 +202,7 @@ int get_new_fd (struct file_map *fm, struct file *fp)
   // Create new fdm_info
   new_fdm->fp = fp;
   new_fdm->fd = fd;
+  new_fdm->mode = mode;
   new_fdm->thread_id = thread_current ()->tid;
   new_fdm->next = fm->fd_map[fd % FD_TABLE_SIZE];
   fm->fd_map[fd % FD_TABLE_SIZE] = new_fdm;
