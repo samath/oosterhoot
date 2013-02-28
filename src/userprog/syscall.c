@@ -49,10 +49,6 @@ static void *buffer_valid (void *buffer, unsigned size);
 struct file_map *fm;
 struct lock filesys_lock;
 
-#define BASE_MMAP_ID 2
-struct lock mmap_lock;
-mapid_t next_mmap_id;
-
 void
 syscall_init (void) 
 {
@@ -64,8 +60,6 @@ syscall_init (void)
   }
   lock_init (&filesys_lock);
   lock_init (&cleanup_lock);
-  lock_init (&mmap_lock);
-  next_mmap_id = BASE_MMAP_ID;
 }
 
 

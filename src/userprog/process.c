@@ -575,6 +575,11 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
 {
+
+  //printf("load segment: %p, %d, %p, %d, %d, %d\n",
+  //        file, ofs, upage, read_bytes, zero_bytes, writable);
+         
+
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
@@ -585,6 +590,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   struct mmap_entry *mme = malloc (sizeof (struct mmap_entry));
   if (mme == NULL) return false;
   mme->fp = file;
+  mme->fm = NULL;
   mme->uaddr = upage;
   mme->zero_bytes = zero_bytes % PGSIZE;
   mme->num_pages = (read_bytes + mme->zero_bytes) / PGSIZE;
@@ -601,28 +607,25 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 #ifdef VMA
       /* Get a page of memory. */
+      
       if (page_read_bytes != 0) { 
-        //supp_page_insert (spt, upage, FRAME_MMAP, mme, !writable);
+        supp_page_insert (spt, upage, FRAME_MMAP, mme, !writable);
       } else {
-        //supp_page_insert (spt, upage, FRAME_ZERO, NULL, !writable);
+        supp_page_insert (spt, upage, FRAME_ZERO, NULL, !writable);
       }
 
       /* Prefer lazy loading */
-      /* supp_page_alloc (sp);
-         uint8_t *kpage = sp->fte->paddr; */
 #else      
       uint8_t *kpage = palloc_get_page (PAL_USER);
       if (kpage == NULL)
         return false;
       
-      /* Load this page. */ 
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
           palloc_free_page (kpage);
           return false; 
         }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-      
+      memset (kpage + page_read_bytes, 0, page_zero_bytes); 
 
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable)) 
@@ -632,7 +635,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
         } 
 #endif
 
-      /* Advance. */
+      /*  Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;

@@ -45,7 +45,8 @@ supp_page_lookup (struct supp_page_table *spt, void *uaddr)
   struct supp_page dummy_spe;
   dummy_spe.uaddr = pg_round_down (uaddr);
 
-  struct hash_elem *result = hash_find (&spt->hash_table, &dummy_spe.hash_elem);
+  struct hash_elem *result = 
+      hash_find (&spt->hash_table, &dummy_spe.hash_elem);
   return result == NULL ? NULL : \
       hash_entry (result, struct supp_page, hash_elem);
 }
