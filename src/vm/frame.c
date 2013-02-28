@@ -67,8 +67,6 @@ frame_alloc (struct frame *fte, void *uaddr)
 
   lock_acquire(&fte->lock);
   
-  fte->paddr = palloc_get_page (PAL_USER);
-
   /* Try to get page. If out of memory, evict a page and try again */
   while ((fte->paddr = palloc_get_page (PAL_USER)) == NULL)
   {

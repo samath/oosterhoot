@@ -652,11 +652,11 @@ setup_stack (void **esp, const char *cmd, int arg_len, int argc)
   bool success = false;
 
 #ifdef VM
-  /* TODO: Pin the frame created here to prevent eviction */
   struct supp_page *spe = supp_page_insert (
     thread_current ()->spt, ((uint8_t *) PHYS_BASE) - PGSIZE,
     FRAME_ZERO, 0, false);
   supp_page_alloc (spe);
+  spe->fte->pinned = true;
   uint32_t *kpage = spe->fte->paddr;
 #else
   uint32_t *kpage = palloc_get_page (0);
