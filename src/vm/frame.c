@@ -126,6 +126,7 @@ frame_dealloc (struct frame *fte)
 
     /* Write to mmapped file if necessary */
     if (fte->src == FRAME_MMAP && !fte->ro &&
+        ((struct mmap_entry *)fte->aux)->fm && /* check if data segment */
         pagedir_is_dirty (spe->thread->pagedir, spe->uaddr)) {
       struct mmap_entry *mme = (struct mmap_entry *) fte->aux;
       unsigned page_num = 

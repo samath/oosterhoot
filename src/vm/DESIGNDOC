@@ -1,0 +1,308 @@
+        +---------------------------+
+		    | CS 140                    |
+		    | PROJECT 3: VIRTUAL MEMORY	|
+		    |	DESIGN DOCUMENT           |
+		    +---------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Sam Keller <samath@stanford.edu>
+Lawrence Xing <lxing@stanford.edu>
+Thomas Shepherd <shephert@stanford.edu>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please give them here.
+
+>> Describe briefly which parts of the assignment were implemented by
+>> each member of your team. If some team members contributed significantly
+>> more or less than others (e.g. 2x), indicate that here.
+
+Sam Keller: Memory-mapped files, stack growth, executable loading
+Lawrence Xing: Page table, frame table, eviction
+Thomas Shepherd: Swap table, eviction
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+
+			PAGE TABLE MANAGEMENT
+			=====================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+
+  struct supp_page
+    {
+      uint32_t *uaddr;
+      struct hash_elem hash_elem;
+      struct list_elem list_elem;
+      struct frame *fte;
+      struct thread *thread;
+    };
+
+
+
+  struct supp_page_table
+    {
+      struct hash hash_table;
+      struct lock lock;
+    };
+
+
+
+
+---- ALGORITHMS ----
+
+>> A2: In a few paragraphs, describe your code for locating the frame,
+>> if any, that contains the data of a given page.
+
+>> A3: How does your code coordinate accessed and dirty bits between
+>> kernel and user virtual addresses that alias a single frame, or
+>> alternatively how do you avoid the issue?
+
+---- SYNCHRONIZATION ----
+
+>> A4: When two user processes both need a new frame at the same time,
+>> how are races avoided?
+
+---- RATIONALE ----
+
+>> A5: Why did you choose the data structure(s) that you did for
+>> representing virtual-to-physical mappings?
+
+		       PAGING TO AND FROM DISK
+		       =======================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+
+
+  enum frame_source
+    {
+      FRAME_ZERO,
+      FRAME MMAP,
+      FRAME_SWAP
+    };
+
+  
+  struct frame
+    {
+      uint32_t *paddr;
+      struct list users;
+      struct list_elem elem;
+      enum frame_source src;
+      uint32_t aux;
+      bool ro;
+      bool pinned;
+      struct lock lock;
+    };
+
+
+  struct swap_table
+    {
+      struct bitmap *map;
+      struct block *swap_block;
+      struct lock swap_table_lock;
+    };
+
+
+
+
+---- ALGORITHMS ----
+
+>> B2: When a frame is required but none is free, some frame must be
+>> evicted.  Describe your code for choosing a frame to evict.
+
+>> B3: When a process P obtains a frame that was previously used by a
+>> process Q, how do you adjust the page table (and any other data
+>> structures) to reflect the frame Q no longer has?
+
+>> B4: Explain your heuristic for deciding whether a page fault for an
+>> invalid virtual address should cause the stack to be extended into
+>> the page that faulted.
+
+---- SYNCHRONIZATION ----
+
+>> B5: Explain the basics of your VM synchronization design.  In
+>> particular, explain how it prevents deadlock.  (Refer to the
+>> textbook for an explanation of the necessary conditions for
+>> deadlock.)
+
+>> B6: A page fault in process P can cause another process Q's frame
+>> to be evicted.  How do you ensure that Q cannot access or modify
+>> the page during the eviction process?  How do you avoid a race
+>> between P evicting Q's frame and Q faulting the page back in?
+
+>> B7: Suppose a page fault in process P causes a page to be read from
+>> the file system or swap.  How do you ensure that a second process Q
+>> cannot interfere by e.g. attempting to evict the frame while it is
+>> still being read in?
+
+>> B8: Explain how you handle access to paged-out pages that occur
+>> during system calls.  Do you use page faults to bring in pages (as
+>> in user programs), or do you have a mechanism for "locking" frames
+>> into physical memory, or do you use some other design?  How do you
+>> gracefully handle attempted accesses to invalid virtual addresses?
+
+---- RATIONALE ----
+
+>> B9: A single lock for the whole VM system would make
+>> synchronization easy, but limit parallelism.  On the other hand,
+>> using many locks complicates synchronization and raises the
+>> possibility for deadlock but allows for high parallelism.  Explain
+>> where your design falls along this continuum and why you chose to
+>> design it this way.
+
+			 MEMORY MAPPED FILES
+			 ===================
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+
+Contains a hash to contain mmap_entry's and a single lock to synchronize
+access to the hash.
+  /* mmap_table */
+  struct mmap_table 
+    {
+      struct hash table;
+      struct lock lock;
+    };
+
+Contains info for allocating and deallocating frames from a memory-mapped
+file.
+  struct mmap_entry
+    {
+      mapid_t map_id;
+      struct file *fp;
+      struct file_map *fm;
+      void *uaddr;
+      unsigned num_pages;
+      unsigned zero_bytes;
+      struct hash_elem hash_elem;
+    };
+
+Used to keep track of which elements in the file-map table from Project 2
+are file descriptors and which represent memory mappings.
+  enum fm_mode
+    {
+      FM_MODE_FD,
+      FM_MODE_MMAP
+    };
+
+Updated file_with_lock (used as a return value for fd lookups) to contain 
+fm_mode.
+  struct file_with_lock {
+    struct file *fp;
+    struct lock *lock;
+    enum fm_mode mode;
+  }
+
+
+---- ALGORITHMS ----
+
+>> C2: Describe how memory mapped files integrate into your virtual
+>> memory subsystem.  Explain how the page fault and eviction
+>> processes differ between swap pages and other pages.
+
+
+Page faults and eviction are each handled by the appropriate methods within
+frame.c. (frame_alloc and frame_dealloc).  Each contains a switch statement
+that checks the frame_src enum in the frame entry.
+
+In a page fault, the handler uses the stored mmap_entry pointer and 
+retrieves the corresponding lock from the file-map.  It then reads in
+each page from the file, setting the remaining bytes to zero.
+
+Eviction (which shares deallocation code with munmap and destroy, for
+freeing the mapped files on exit) calls frame_dealloc.  This checks for 
+three properties: a) The frame is used for an mmap file
+                  b) The frame is not read only
+                  c) The physical page is marked dirty
+If all of these are true, the handler again uses the stored mmap_entry to 
+write all changes back to the original file.
+
+
+>> C3: Explain how you determine whether a new file mapping overlaps
+>> any existing segment.
+
+
+Any page that has already been allocated, for an existing file mapping, 
+segment, or otherwise, has an entry in the supplemental page table.  This 
+is true even if that page has never been touched.
+
+Therefore, before opening the file, allocating a new map_id, or inserting
+a new mmap_entry, the syscall handler calculates the number of pages
+required for the mapping.  For each virtual page, the handler checks that
+the page is a valid virtual address and that no entry currently exists in 
+the supplemental page table.  If all of these checks pass, it inserts the 
+relevant pages and maps the file.
+
+
+---- RATIONALE ----
+
+>> C4: Mappings created with "mmap" have similar semantics to those of
+>> data demand-paged from executables, except that "mmap" mappings are
+>> written back to their original files, not to swap.  This implies
+>> that much of their implementation can be shared.  Explain why your
+>> implementation either does or does not share much of the code for
+>> the two situations.
+
+
+Executable loading shares the same code paths for allocation and deallocation
+of frames, but does not directly use mmap or munmap.  Each segment creates a
+dummy mmap_entry, which is never entered into an mmap-table.  This entry is 
+initialized with valid file pointers and file size information, such that the
+first access to the frame can read in from the file system correctly.  
+
+Since this mmap_entry is never used or given a valid map_id, we can check
+when freeing a frame with source FRAME_MMAP if it was created by an mmap () 
+system call or a loaded executable.  In the second case, the data then 
+is shifted to swap space. This difference only appears when evicting or 
+exiting a data page, and after the first eviction it is treated as any other 
+space in the swap table.
+
+This strategy for managing executables is convenient because it takes advantag
+of the existing infrastructure.  Since all loading and writing to disk are 
+handled in frame_alloc and frame_dealloc, sharing the code path without 
+using an actual mmap_table is the most effective solution.
+
+
+			   SURVEY QUESTIONS
+			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?
