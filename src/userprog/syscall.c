@@ -41,10 +41,11 @@ static void syscall_munmap (mapid_t mid);
 
 static struct mmap_entry * mmap_entry_from_fd (int fd);
 
-static void *utok_addr (void *uptr);
-static void *uptr_valid (void *uptr);
-static void *str_valid (void *str);
-static void *buffer_valid (void *buffer, unsigned size);
+static bool validate (void *uptr, void *esp);
+static void *utok_addr (void *uptr, void *esp);
+static void *uptr_valid (void *uptr, void *esp);
+static void *str_valid (void *str, void *esp);
+static void *buffer_valid (void *buffer, void * esp, unsigned size);
 
 struct file_map *fm;
 struct lock filesys_lock;
@@ -88,7 +89,8 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   /* Validate the first addr of the stack frame */
-  void *esp = uptr_valid (f->esp);
+  void *esp = uptr_valid (f->esp, NULL);
+  
   if (esp == NULL) {
     syscall_exit (-1);
     return;
@@ -107,7 +109,7 @@ syscall_handler (struct intr_frame *f)
   int i = 0;
   for (; i < argc; i++) {
     /* Validate each argument  */
-    void *vaddr = uptr_valid((uint32_t *) f->esp + 1 + i);
+    void *vaddr = uptr_valid((uint32_t *) f->esp + 1 + i, f->esp);
     if (vaddr == NULL) {
       syscall_exit (-1);
       return;
@@ -130,7 +132,7 @@ syscall_handler (struct intr_frame *f)
       syscall_exit ((int) argbuf[0]);
       break;
     case SYS_EXEC:
-      if (str_valid ((void *) argbuf[0]) == NULL) {
+      if (str_valid ((void *) argbuf[0], f->esp) == NULL) {
         syscall_exit (-1);
         return;
       }
@@ -140,7 +142,7 @@ syscall_handler (struct intr_frame *f)
       retval = syscall_wait ((int) argbuf[0]);
       break;
     case SYS_CREATE:
-      if (str_valid ((char *) argbuf[0]) == NULL) {
+      if (str_valid ((char *) argbuf[0], f->esp) == NULL) {
         syscall_exit (-1);
         return;
       }
@@ -148,14 +150,14 @@ syscall_handler (struct intr_frame *f)
                                      (unsigned) argbuf[1]);
       break;
     case SYS_REMOVE:
-      if (!uptr_valid ((char *) argbuf[0])) {
+      if (!uptr_valid ((char *) argbuf[0], f->esp)) {
         syscall_exit (-1);
         return;
       }
       retval = (int) syscall_remove ((char *) argbuf[0]);
       break;
     case SYS_OPEN:
-      if (str_valid ((char *) argbuf[0]) == NULL) {
+      if (str_valid ((char *) argbuf[0], f->esp) == NULL) {
         syscall_exit (-1);
         return;
       }
@@ -165,7 +167,8 @@ syscall_handler (struct intr_frame *f)
       retval = syscall_filesize ((int) argbuf[0]);
       break;
     case SYS_READ:
-      if (buffer_valid ((void *) argbuf[1], (unsigned) argbuf[2]) == NULL) {
+      if (buffer_valid ((void *) argbuf[1], f->esp, 
+                        (unsigned) argbuf[2]) == NULL) {
         syscall_exit (-1);
         return;
       }
@@ -174,7 +177,8 @@ syscall_handler (struct intr_frame *f)
                              (unsigned) argbuf[2]);
       break;
     case SYS_WRITE:
-      if (buffer_valid ((void *) argbuf[1], (unsigned) argbuf[2]) == NULL) {
+      if (buffer_valid ((void *) argbuf[1], f->esp, 
+                        (unsigned) argbuf[2]) == NULL) {
         syscall_exit (-1);
         return;
       }
@@ -422,12 +426,29 @@ static struct mmap_entry * mmap_entry_from_fd (int fd)
   return mme;
 }
 
-
+static bool validate (void *uptr, void *esp) {
+  if (esp != NULL &&
+        ((uptr >= esp && is_user_vaddr (uptr))
+        || (char *)uptr == (char *)esp - 4
+        || (char *)uptr == (char *)esp - 32)) {
+    struct supp_page *spe = supp_page_lookup (thread_current ()->spt, uptr);
+    if (spe != NULL) {
+      if (spe->fte->paddr == NULL) supp_page_alloc (spe);
+      return true;
+    } else {
+      spe = supp_page_insert 
+            (thread_current ()->spt, uptr, FRAME_ZERO, NULL, false);
+      supp_page_alloc (spe);
+      return true;
+    }
+  } else return is_user_vaddr (uptr);
+}
+  
 
 /* Convert a user virtual addr into a kernel virtual addr.
    Return NULL if the mapping is absent or uaddr is not a user addr. */
-static void *utok_addr (void *uptr) {
-  if (!is_user_vaddr (uptr)) return NULL;
+static void *utok_addr (void *uptr, void *esp) {
+  if (!validate (uptr, esp)) return NULL;
   return pagedir_get_page (thread_current ()->pagedir, uptr);
 }
 
@@ -435,8 +456,8 @@ static void *utok_addr (void *uptr) {
 /* Checks to see if a user pointer is valid by (a)
    checking all four bytes are below PHYS_BASE and (b) 
    an entry exists in the page table. */
-static void *uptr_valid (void *uptr) {
-  return buffer_valid (uptr, sizeof (uint32_t *));
+static void *uptr_valid (void *uptr, void *esp) {
+  return buffer_valid (uptr, esp, sizeof (uint32_t *));
 }
 
 /* Iterates through a string virtual address char by char to
@@ -444,13 +465,13 @@ static void *uptr_valid (void *uptr) {
    Only updates page conversion for bytes in the argument str that
    have crossed a page boundary, to limit total calls to pagedir_get_page.
 */
-static void *str_valid (void *str) {
+static void *str_valid (void *str, void *esp) {
   char *c = NULL;
   void *retval = NULL;
   while (true) {
     /* Translate the user virtual addr into a kernel virtual addr */
     c = (retval == NULL || (unsigned) str % PGSIZE == 0) ?
-        ((char *) utok_addr(str)) : c + 1;
+        ((char *) utok_addr(str, esp)) : c + 1;
     if (c == NULL) return NULL;
     if (retval == NULL) retval = c;
     if (*c == '\0') return retval;
@@ -463,8 +484,8 @@ static void *str_valid (void *str) {
    Calculates the maximum user virtual page address, then all pages 
    in between maximum address and starting address.
 */
-static void *buffer_valid (void *buffer, unsigned size) {
-  void *retval = utok_addr (buffer);
+static void *buffer_valid (void *buffer, void *esp, unsigned size) {
+  void *retval = utok_addr (buffer, esp);
   if (retval == NULL) return NULL;
 
   // Starting address of maximum page read by buffer.
@@ -473,7 +494,7 @@ static void *buffer_valid (void *buffer, unsigned size) {
   
   /* Step through page-by-page */
   for(; max_addr > buffer; max_addr = (char *)max_addr - PGSIZE) {
-    if (utok_addr (max_addr) == NULL)
+    if (utok_addr (max_addr, esp) == NULL)
       return NULL;
   }
   return retval;

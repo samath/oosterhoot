@@ -2,11 +2,13 @@
 #define VM_MMAP_INFO_H
 
 #include "lib/kernel/hash.h"
+#include "threads/synch.h"
 #include "lib/user/syscall_types.h"
 
 struct mmap_table
 {
   struct hash table;
+  struct lock lock;
 };
 
 struct mmap_entry
