@@ -120,7 +120,6 @@ void
 frame_dealloc (struct frame *fte)
 {
   lock_acquire(&fte->lock);
-
   struct list_elem *e = list_begin (&fte->users);
   for (; e != list_end (&fte->users); e = list_remove (e)) {
     struct supp_page *spe = list_entry (e, struct supp_page, list_elem);
@@ -148,10 +147,10 @@ frame_dealloc (struct frame *fte)
     /* In all other cases, no need to write memory back to disk. */
 
     pagedir_clear_page (spe->thread->pagedir, spe->uaddr);
-    spe->fte = frame_create (fte->src, fte->aux, fte->ro);
   }
   list_remove (&fte->elem);
   palloc_free_page (fte->paddr);
+  fte->paddr = NULL;
   lock_release(&fte->lock);
 }
 

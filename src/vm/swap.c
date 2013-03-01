@@ -48,21 +48,17 @@ swap_out (uint32_t *src_addr, block_sector_t *disk_block)
   if (block_offset == BITMAP_ERROR)
   {
     lock_release(&st->swap_table_lock);
-    printf("page_idx = BITMAP_ERROR in swap_out() in swap.c\n");
-    thread_exit();
+    PANIC ("BITMAP error in scanning swap space for block offset");
   }
   //Update disk_block to the location on disk where the memory is being stored
   *disk_block = block_offset;  
   lock_release(&st->swap_table_lock);
 
-  //TODO Not sure if this is right...
-  //ASSERT(block_offset % BLOCK_SECTOR_SIZE == 0);
-
   //write the memory from the src_addr onto the block
   int i = 0;
   for (i = 0; i<PGSIZE; i += BLOCK_SECTOR_SIZE)
   {
-    block_write (st->swap_block, i + block_offset, src_addr + i);
+    block_write (st->swap_block, i/BLOCK_SECTOR_SIZE + block_offset, src_addr + i);
   }
 }
    
@@ -77,7 +73,7 @@ swap_in (uint32_t *dest_addr, block_sector_t *disk_block)
   //Read in a page worth of memory
   for(i = 0; i<PGSIZE; i += BLOCK_SECTOR_SIZE)
   {
-    block_read (st->swap_block, i + block_offset, dest_addr + i);
+    block_read (st->swap_block, i/BLOCK_SECTOR_SIZE + block_offset, dest_addr + i);
   }
 
   //Update the swap_table that this disk space is free again
