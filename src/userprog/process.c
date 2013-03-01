@@ -207,7 +207,6 @@ process_wait (tid_t child_tid)
 void
 process_cleanup (int exit_code)
 {
-  lock_acquire (&cleanup_lock);
 
   struct thread *t = thread_current ();
 
@@ -216,7 +215,9 @@ process_cleanup (int exit_code)
   if (t->pinfo == NULL) return; 
 
   /* Print exit message. */
+  lock_acquire (&cleanup_lock);
   printf ("%s: exit(%d)\n", t->name, exit_code);
+  lock_release (&cleanup_lock);
 
   /* Update exit code */
   t->pinfo->exit_code = exit_code;
@@ -253,8 +254,6 @@ process_cleanup (int exit_code)
   file_close (t->pinfo->fp);
 
   mmap_table_destroy ();
-
-  lock_release (&cleanup_lock);
 }
 
 /* Free the current process's resources. */
