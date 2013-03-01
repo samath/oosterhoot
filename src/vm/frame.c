@@ -28,7 +28,7 @@ frame_init (void)
 
 /* Initilize a new frame table entry. */
 struct frame *
-frame_create (enum frame_source src, void *aux, bool ro)
+frame_create (enum frame_source src, uint32_t aux, bool ro)
 {
   struct frame *fte = malloc (sizeof (struct frame));
   if (fte == NULL)
@@ -98,7 +98,7 @@ frame_alloc (struct frame *fte, void *uaddr)
 
       break;
     case FRAME_SWAP:
-      swap_in (fte->paddr, (block_sector_t *) fte->aux);
+      swap_in (fte->paddr, (block_sector_t *) &fte->aux);
       break;
     default:
       PANIC ("Invalid frame source");
@@ -143,17 +143,16 @@ frame_dealloc (struct frame *fte)
     else if (!fte->ro && pagedir_is_dirty (spe->thread->pagedir, spe->uaddr))
     {
       fte->src = FRAME_SWAP;
-      swap_out(fte->paddr, (uint32_t *)fte->aux);
+      swap_out(fte->paddr, (block_sector_t *) &fte->aux);
     }
     /* In all other cases, no need to write memory back to disk. */
 
     pagedir_clear_page (spe->thread->pagedir, spe->uaddr);
     spe->fte = frame_create (fte->src, fte->aux, fte->ro);
-    lock_release(&fte->lock);
   }
-
   list_remove (&fte->elem);
   palloc_free_page (fte->paddr);
+  lock_release(&fte->lock);
 }
 
 /* Runs the eviction process, looping through all the frame entries searching
@@ -164,6 +163,7 @@ eviction(void)
 {
   /* Eviction should never be called if the frame_table is empty */
   ASSERT(!list_empty(&frame_table));
+  ASSERT(list_size(&frame_table) > 1);
 
   if(clock_hand == NULL)
     clock_hand = list_begin(&frame_table);
@@ -191,10 +191,9 @@ eviction(void)
     }
 
     /* Move clock hand to next frame in the list */
-    if(clock_hand != list_end(&frame_table))
-      clock_hand = list_next(clock_hand);
-    else
-      clock_hand = list_begin(&frame_table);
+    clock_hand = list_next(&frame_table);
+    if(clock_hand == list_end(&frame_table))
+      clock_hand = list_begin(clock_hand);
 
 
     if(dealloc && !fte->pinned)
