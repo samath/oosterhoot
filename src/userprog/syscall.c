@@ -42,6 +42,7 @@ static void syscall_munmap (mapid_t mid);
 static struct mmap_entry * mmap_entry_from_fd (int fd);
 
 static bool validate (void *uptr, void *esp);
+static void *utok_esp (void *esp);
 static void *utok_addr (void *uptr, void *esp);
 static void *uptr_valid (void *uptr, void *esp);
 static void *str_valid (void *str, void *esp);
@@ -89,7 +90,7 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   /* Validate the first addr of the stack frame */
-  void *esp = uptr_valid (f->esp, NULL);
+  void *esp = utok_esp (f->esp);
   
   if (esp == NULL) {
     syscall_exit (-1);
@@ -427,23 +428,26 @@ static struct mmap_entry * mmap_entry_from_fd (int fd)
 }
 
 static bool validate (void *uptr, void *esp) {
-  if (esp != NULL &&
-        ((uptr >= esp && is_user_vaddr (uptr))
+  struct supp_page *spe = supp_page_lookup (thread_current ()->spt, uptr);
+  if (spe != NULL) {
+    if (spe->fte->paddr == NULL) supp_page_alloc (spe);
+    return true;
+  } else if ((uptr >= esp && is_user_vaddr (uptr))
         || (char *)uptr == (char *)esp - 4
-        || (char *)uptr == (char *)esp - 32)) {
-    struct supp_page *spe = supp_page_lookup (thread_current ()->spt, uptr);
-    if (spe != NULL) {
-      if (spe->fte->paddr == NULL) supp_page_alloc (spe);
-      return true;
-    } else {
-      spe = supp_page_insert 
+        || (char *)uptr == (char *)esp - 32) 
+  {
+    spe = supp_page_insert 
             (thread_current ()->spt, uptr, FRAME_ZERO, NULL, false);
-      supp_page_alloc (spe);
-      return true;
-    }
+    supp_page_alloc (spe);
+    return true;
   } else return is_user_vaddr (uptr);
 }
   
+static void *utok_esp (void *esp) 
+{
+  if (!is_user_vaddr (esp) || esp < STACK_BOUND) return NULL;
+  return pagedir_get_page (thread_current ()->pagedir, esp);
+}
 
 /* Convert a user virtual addr into a kernel virtual addr.
    Return NULL if the mapping is absent or uaddr is not a user addr. */

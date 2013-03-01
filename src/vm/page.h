@@ -6,6 +6,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "vm/frame.h"
+#include "userprog/file-map.h"
 
 enum frame_source;
 

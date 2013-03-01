@@ -161,7 +161,8 @@ page_fault (struct intr_frame *f)
   if (spe == NULL) {
     /* No page entry exists, so alloc a new page for stack growth */
     char *esp = f->esp;
-    if ((fault_addr >= (void *)esp && is_user_vaddr(fault_addr)) ||
+    if (esp < STACK_BOUND || 
+        (fault_addr >= (void *)esp && is_user_vaddr(fault_addr)) ||
         fault_addr == (void *)(esp - 4) || fault_addr == (void *)(esp - 32)) {
       struct supp_page *spe = supp_page_insert (
         t->spt, fault_addr, FRAME_ZERO, NULL, false);
