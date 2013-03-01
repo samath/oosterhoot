@@ -56,7 +56,7 @@ swap_out (uint32_t *src_addr, block_sector_t *disk_block)
   lock_release(&st->swap_table_lock);
 
   //TODO Not sure if this is right...
-  ASSERT(block_offset % BLOCK_SECTOR_SIZE == 0);
+  //ASSERT(block_offset % BLOCK_SECTOR_SIZE == 0);
 
   //write the memory from the src_addr onto the block
   int i = 0;

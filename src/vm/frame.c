@@ -164,7 +164,6 @@ eviction(void)
   /* Eviction should never be called if the frame_table is empty */
   ASSERT(!list_empty(&frame_table));
   ASSERT(list_size(&frame_table) > 1);
-
   if(clock_hand == NULL)
     clock_hand = list_begin(&frame_table);
 
@@ -191,9 +190,9 @@ eviction(void)
     }
 
     /* Move clock hand to next frame in the list */
-    clock_hand = list_next(&frame_table);
+    clock_hand = list_next(clock_hand);
     if(clock_hand == list_end(&frame_table))
-      clock_hand = list_begin(clock_hand);
+      clock_hand = list_begin(&frame_table);
 
 
     if(dealloc && !fte->pinned)
