@@ -164,7 +164,7 @@ page_fault (struct intr_frame *f)
     if ((fault_addr >= (void *)esp && is_user_vaddr(fault_addr)) ||
         fault_addr == (void *)(esp - 4) || fault_addr == (void *)(esp - 32)) {
       struct supp_page *spe = supp_page_insert (
-        t->spt, fault_addr, FRAME_ZERO, 0, false);
+        t->spt, fault_addr, FRAME_ZERO, NULL, false);
       supp_page_alloc (spe);
       return;
     }

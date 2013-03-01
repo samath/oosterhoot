@@ -4,6 +4,8 @@
 #include "threads/vaddr.h"
 #include "vm/frame.h"
 
+static struct mmap_entry *lookup (struct mmap_table * mmt, mapid_t map_id);
+
 /* HASH TABLE HELPERS */
 
 static unsigned mmap_hash (const struct hash_elem *e, void *aux UNUSED)
@@ -48,12 +50,21 @@ struct mmap_table *mmap_table_create ()
   if (mmt == NULL) PANIC ("Mmap table could not be allocated.");
 
   hash_init (&mmt->table, mmap_hash, mmap_less, NULL);
+  lock_init (&mmt->lock);
 
   return mmt;
 }
 
+struct mmap_entry *mmap_table_lookup (struct mmap_table *mmt, mapid_t map_id)
+{
+  lock_acquire (&mmt->lock);
+  struct mmap_entry *mme = lookup (mmt, map_id);
+  lock_release (&mmt->lock);
+  return mme;
+}
+
 // Return the mmap_entry for map_id, or NULL if none exists.
-struct mmap_entry *mmap_table_lookup (struct mmap_table *mmt, 
+static struct mmap_entry *lookup (struct mmap_table *mmt, 
                                       mapid_t map_id) 
 {
   /* Construct a dummy entry for comparison.
@@ -69,21 +80,33 @@ struct mmap_entry *mmap_table_lookup (struct mmap_table *mmt,
 void mmap_table_insert (struct mmap_table *mmt, 
                         struct mmap_entry *mme)
 {
+  lock_acquire (&mmt->lock);
   hash_insert (&mmt->table, &mme->hash_elem);
+  lock_release (&mmt->lock);
 }
 
 void mmap_table_remove (struct mmap_table *mmt, mapid_t map_id)
 {
-  struct mmap_entry *result = mmap_table_lookup (mmt, map_id);
-  if (result == NULL) return;
+  lock_acquire (&mmt->lock);
+  struct mmap_entry *result = lookup (mmt, map_id);
+  if (result == NULL) {
+    lock_release (&mmt->lock);
+    return;
+  }
   hash_delete (&mmt->table, &result->hash_elem);
+  lock_release (&mmt->lock);
 }
 
 void mmap_table_unmap (struct mmap_table *mmt, mapid_t map_id) 
 {
-  struct mmap_entry *mme = mmap_table_lookup (mmt, map_id);
-  if (mme == NULL) return;
+  lock_acquire (&mmt->lock);
+  struct mmap_entry *mme = lookup (mmt, map_id);
+  if (mme == NULL) {
+    lock_release (&mmt->lock);
+    return;
+  }
   mmap_action_dispose (&mme->hash_elem, NULL);
+  lock_release (&mmt->lock);
 }
 
 
