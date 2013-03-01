@@ -62,7 +62,7 @@ supp_page_insert (struct supp_page_table *spt, void *uaddr,
     PANIC ("Supplemental page entry could not be allocated");
 
   spe->uaddr = pg_round_down (uaddr);
-  spe->fte = frame_create (src, aux, ro);
+  spe->fte = frame_create (src, (uint32_t) aux, ro);
   list_push_back (&spe->fte->users, &spe->list_elem);
   spe->thread = thread_current ();
 

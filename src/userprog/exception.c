@@ -168,7 +168,7 @@ page_fault (struct intr_frame *f)
       supp_page_alloc (spe);
       return;
     }
-  } else {
+  } else if (!write || !spe->fte->ro) {
     /* Otherwise, the page entry exists, so bring it in */
     supp_page_alloc (spe);
     return;
