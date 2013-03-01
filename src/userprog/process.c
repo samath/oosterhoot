@@ -92,8 +92,8 @@ process_execute (const char *cmd)
       lock_release (&t->child_lock);
     }
 
-    if (child->exit_code == -1)
-      return TID_ERROR;
+    //if (child->exit_code == -1)
+      //return TID_ERROR;
   } else {
     palloc_free_page (child->cmd);
   }

@@ -219,8 +219,8 @@ static void syscall_halt ()
 
 static void syscall_exit (int status)
 {
-  syscall_release_files ();
   process_cleanup (status);
+  syscall_release_files ();
   thread_exit ();
 }
 
