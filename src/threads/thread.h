@@ -25,6 +25,7 @@ enum thread_status
 enum process_status
   {
     PROCESS_STARTING,    /* Loading executable */
+    PROCESS_AWAIT_PARENT,
     PROCESS_RUNNING,     /* Running */
     PROCESS_DYING,       /* Completed execution */
     PROCESS_ORPHANED     /* No more parental responsibilities */
