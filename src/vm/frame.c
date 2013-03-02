@@ -4,6 +4,7 @@
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/thread.h"
 #include "userprog/pagedir.h"
 #include "vm/frame.h"
 #include "vm/page.h"
@@ -49,11 +50,17 @@ frame_free (struct frame *fte)
 {
   if (fte->paddr != NULL) {
     lock_acquire (&frame_lock);
-    /* Mark as read-only to ensure deletion without swapping */
-    if (fte->src == FRAME_SWAP) {
-      fte->ro = FRAME_ZERO;
+    /* Mark frame as FRAME_ZERO and read only to ensure deletion */
+    if(fte->src != FRAME_MMAP)
+    {
+      fte->src = FRAME_ZERO;
+      fte->ro = true;
     }
     frame_dealloc (fte);
+    if(&fte->elem == clock_hand)
+    {
+      clock_hand = NULL;
+    }
     list_remove (&fte->elem);
     lock_release (&frame_lock);
   }
@@ -69,9 +76,8 @@ void
 frame_alloc (struct frame *fte, void *uaddr)
 {
   ASSERT (fte->paddr == NULL);
-
   lock_acquire(&fte->lock);
-  
+
   /* Try to get page. If out of memory, evict a page and try again */
   while ((fte->paddr = palloc_get_page (PAL_USER)) == NULL)
   {
@@ -99,7 +105,6 @@ frame_alloc (struct frame *fte, void *uaddr)
                      0, mme->zero_bytes);
       }
       if (fwl.lock) lock_release (fwl.lock);
-
       break;
     case FRAME_SWAP:
       swap_in (fte->paddr, (block_sector_t *) &fte->aux);
@@ -124,13 +129,11 @@ void
 frame_dealloc (struct frame *fte)
 {
   lock_acquire(&fte->lock);
-
   struct list_elem *e = list_begin (&fte->users);
   for (; e != list_end (&fte->users); e = list_next (e)) {
     struct supp_page *spe = list_entry (e, struct supp_page, list_elem);
-
-    if ((fte->src != FRAME_SWAP) && (!pagedir_is_dirty (spe->thread->pagedir, spe->uaddr) ||
-      fte->ro))
+    if ((fte->src != FRAME_SWAP) && 
+        (!pagedir_is_dirty (spe->thread->pagedir, spe->uaddr) || fte->ro))
     {
       /* Do nothing */
     }
@@ -173,7 +176,7 @@ eviction (void)
 {
   /* Eviction should never be called if the frame_table is empty */
   ASSERT (list_size (&frame_table) > 1);
-
+  lock_acquire(&frame_lock);
   if (clock_hand == NULL)
     clock_hand = list_begin (&frame_table);
 
@@ -210,4 +213,5 @@ eviction (void)
       break;
     }
   }
+  lock_release(&frame_lock);
 }
