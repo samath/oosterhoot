@@ -71,7 +71,7 @@ frame_alloc (struct frame *fte, void *uaddr)
   /* Try to get page. If out of memory, evict a page and try again */
   while ((fte->paddr = palloc_get_page (PAL_USER)) == NULL)
   {
-   eviction();
+    eviction();
   }
 
   struct mmap_entry *mme;
@@ -120,14 +120,20 @@ void
 frame_dealloc (struct frame *fte)
 {
   lock_acquire(&fte->lock);
+
   struct list_elem *e = list_begin (&fte->users);
   for (; e != list_end (&fte->users); e = list_remove (e)) {
     struct supp_page *spe = list_entry (e, struct supp_page, list_elem);
 
+    if (!pagedir_is_dirty (spe->thread->pagedir, spe->uaddr) ||
+      fte->ro)
+    {
+      /* Do nothing */
+    }
     /* Write to mmapped file if necessary */
-    if (fte->src == FRAME_MMAP && !fte->ro &&
-        ((struct mmap_entry *)fte->aux)->fm && /* check if data segment */
-        pagedir_is_dirty (spe->thread->pagedir, spe->uaddr)) {
+    if (fte->src == FRAME_MMAP &&
+        ((struct mmap_entry *)fte->aux)->fm) /* check if data segment */
+    {    
       struct mmap_entry *mme = (struct mmap_entry *) fte->aux;
       unsigned page_num = 
           ((unsigned) spe->uaddr - (unsigned) mme->uaddr) / PGSIZE;
@@ -140,15 +146,15 @@ frame_dealloc (struct frame *fte)
       if (fwl.lock) lock_release (fwl.lock);
     }
     /* Write to swap space */
-    else if (!fte->ro && pagedir_is_dirty (spe->thread->pagedir, spe->uaddr))
+    else
     {
       fte->src = FRAME_SWAP;
-      swap_out(fte->paddr, (block_sector_t *) &fte->aux);
-    }
-    /* In all other cases, no need to write memory back to disk. */
+      swap_out (fte->paddr, (block_sector_t *) &fte->aux);
+    } 
 
     pagedir_clear_page (spe->thread->pagedir, spe->uaddr);
   }
+
   list_remove (&fte->elem);
   palloc_free_page (fte->paddr);
   fte->paddr = NULL;
@@ -162,10 +168,10 @@ void
 eviction(void)
 {
   /* Eviction should never be called if the frame_table is empty */
-  ASSERT(!list_empty(&frame_table));
-  ASSERT(list_size(&frame_table) > 1);
-  if(clock_hand == NULL)
-    clock_hand = list_begin(&frame_table);
+  ASSERT (list_size(&frame_table) > 1);
+
+  if (clock_hand == NULL)
+    clock_hand = list_begin (&frame_table);
 
   struct list_elem *e;
   struct supp_page *spe;
@@ -173,31 +179,30 @@ eviction(void)
   bool dealloc = true;
 
   /* Keep looping through frames until we find one to evict */
-  while(true)
+  while (true)
   {
-    fte = list_entry(clock_hand, struct frame, elem);
-    e = list_begin(&fte->users);
+    fte = list_entry (clock_hand, struct frame, elem);
+    e = list_begin (&fte->users);
     dealloc = true;
     for (; e != list_end (&fte->users); e = list_next (e))
     {
       spe = list_entry (e, struct supp_page, list_elem);
       /* If page has been accessed, do not dealloc frame. */
-      if(pagedir_is_accessed(spe->thread->pagedir, spe->uaddr))
+      if (pagedir_is_accessed (spe->thread->pagedir, spe->uaddr))
       {
         dealloc = false;
-        pagedir_set_accessed(spe->thread->pagedir, spe->uaddr, false);
+        pagedir_set_accessed (spe->thread->pagedir, spe->uaddr, false);
       }
     }
 
     /* Move clock hand to next frame in the list */
-    clock_hand = list_next(clock_hand);
-    if(clock_hand == list_end(&frame_table))
-      clock_hand = list_begin(&frame_table);
+    clock_hand = list_next (clock_hand);
+    if (clock_hand == list_end (&frame_table))
+      clock_hand = list_begin (&frame_table);
 
-
-    if(dealloc && !fte->pinned)
+    if (dealloc && !fte->pinned)
     {
-      frame_dealloc(fte);
+      frame_dealloc (fte);
       break;
     }
   }
