@@ -51,7 +51,6 @@ swap_out (uint32_t *src_addr, block_sector_t *disk_block)
     PANIC ("BITMAP error in scanning swap space for block offset");
   }
   //Update disk_block to the location on disk where the memory is being stored
-  *disk_block = block_offset;  
   lock_release(&st->swap_table_lock);
 
   //write the memory from the src_addr onto the block
@@ -61,6 +60,8 @@ swap_out (uint32_t *src_addr, block_sector_t *disk_block)
     block_write (st->swap_block, i/BLOCK_SECTOR_SIZE + block_offset,
                  src_addr + i/sizeof(uint32_t));
   }
+
+  *disk_block = block_offset;  
 }
    
 //Swap into memory from the disk. Swap_in must only be called if swap_out was

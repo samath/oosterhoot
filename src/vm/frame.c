@@ -64,6 +64,8 @@ frame_free (struct frame *fte)
     list_remove (&fte->elem);
     lock_release (&frame_lock);
   }
+  else if(fte->src == FRAME_SWAP)
+    swap_delete(&fte->aux);
 
   free (fte);
 }
