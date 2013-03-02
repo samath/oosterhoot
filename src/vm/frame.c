@@ -58,11 +58,11 @@ frame_free (struct frame *fte)
     }
     frame_dealloc (fte);
     if(&fte->elem == clock_hand)
-    {
       clock_hand = NULL;
-    }
     list_remove (&fte->elem);
     lock_release (&frame_lock);
+  } else if (fte->src == FRAME_SWAP) {
+    swap_delete (&fte->aux);
   }
   else if(fte->src == FRAME_SWAP)
     swap_delete(&fte->aux);
@@ -78,16 +78,15 @@ void
 frame_alloc (struct frame *fte, void *uaddr)
 {
   ASSERT (fte->paddr == NULL);
-  lock_acquire(&fte->lock);
 
   /* Try to get page. If out of memory, evict a page and try again */
   while ((fte->paddr = palloc_get_page (PAL_USER)) == NULL)
   {
-    eviction();
+    eviction ();
   }
 
   struct mmap_entry *mme;
-  
+
   switch (fte->src) {
     case FRAME_ZERO:
       memset (fte->paddr, 0, PGSIZE);
@@ -116,10 +115,10 @@ frame_alloc (struct frame *fte, void *uaddr)
   }
 
   lock_acquire (&frame_lock);
+  lock_acquire (&fte->lock);
   list_push_back (&frame_table, &fte->elem);
-  lock_release (&frame_lock);
   lock_release (&fte->lock);
-
+  lock_release (&frame_lock);
 }
 
 

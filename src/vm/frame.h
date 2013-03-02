@@ -30,7 +30,7 @@ struct frame
     bool ro;                    // Read-only
     bool pinned;                // Frame should not be evicted
 
-   struct lock lock;            // Protects frame entry during allocation and
+    struct lock lock;            // Protects frame entry during allocation and
                                 // eviction process.
   };
 

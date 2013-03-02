@@ -733,6 +733,9 @@ setup_stack (void **esp, const char *cmd, int arg_len, int argc)
         palloc_free_page (kpage);
     }
 
+#ifdef VM
+  spe->fte->pinned = false;
+#endif
 
   return success;
 }

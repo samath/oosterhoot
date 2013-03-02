@@ -57,8 +57,9 @@ supp_page_table_free (struct supp_page_table *spt)
     /* Either remove this from the users or free the frame */
     if (list_size (&spe->fte->users) > 1)
       list_remove (&spe->list_elem);
-    else
+    else {
       frame_free (spe->fte);
+    }
 
     list_push_back (&trash, &spe->list_elem);
   }
