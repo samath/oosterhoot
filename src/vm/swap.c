@@ -58,7 +58,8 @@ swap_out (uint32_t *src_addr, block_sector_t *disk_block)
   int i = 0;
   for (i = 0; i<PGSIZE; i += BLOCK_SECTOR_SIZE)
   {
-    block_write (st->swap_block, i/BLOCK_SECTOR_SIZE + block_offset, src_addr + i);
+    block_write (st->swap_block, i/BLOCK_SECTOR_SIZE + block_offset,
+                 src_addr + i/sizeof(uint32_t));
   }
 }
    
@@ -73,7 +74,8 @@ swap_in (uint32_t *dest_addr, block_sector_t *disk_block)
   //Read in a page worth of memory
   for(i = 0; i<PGSIZE; i += BLOCK_SECTOR_SIZE)
   {
-    block_read (st->swap_block, i/BLOCK_SECTOR_SIZE + block_offset, dest_addr + i);
+    block_read (st->swap_block, i/BLOCK_SECTOR_SIZE + block_offset,
+                dest_addr + i/sizeof(uint32_t));
   }
 
   //Update the swap_table that this disk space is free again
