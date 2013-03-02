@@ -165,10 +165,10 @@ frame_dealloc (struct frame *fte)
    for a frame that has not been accessed recently and deallocating it, making
    room for a new page to be brought into memory. */
 void
-eviction(void)
+eviction (void)
 {
   /* Eviction should never be called if the frame_table is empty */
-  ASSERT (list_size(&frame_table) > 1);
+  ASSERT (list_size (&frame_table) > 1);
 
   if (clock_hand == NULL)
     clock_hand = list_begin (&frame_table);

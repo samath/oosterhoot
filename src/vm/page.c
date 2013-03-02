@@ -39,6 +39,45 @@ supp_page_table_create (void)
   return spt;
 }
 
+void
+supp_page_table_free (struct supp_page_table *spt)
+{
+  /* Reuse the list_elem, for wiring into the frame's users
+     table, to collect all hash entries for freeing (can't
+     free inside hash iteration). */
+  struct list trash;
+  list_init (&trash);
+  
+  struct hash_iterator iter;
+  hash_first (&iter, &spt->hash_table);
+  while (hash_next (&iter)) {
+    struct supp_page *spe = hash_entry (hash_cur (&iter),
+                            struct supp_page, hash_elem); 
+
+    /* Either remove this from the users or free the frame */
+    if (list_size (&spe->fte->users) > 1)
+      list_remove (&spe->list_elem);
+    else
+      frame_free (spe->fte);
+
+    list_push_back (&trash, &spe->list_elem);
+  }
+
+  /* Now actually free the entries */
+  struct list_elem *e = list_begin (&trash);
+  for (; e != list_end (&trash);) {
+    struct supp_page *spe = list_entry (e,
+                            struct supp_page, list_elem);
+
+    e = list_next (e); // Advance before deleting
+    supp_page_remove (spt, spe->uaddr); 
+  }
+
+  hash_destroy (&spt->hash_table, NULL);
+  free (spt);
+}
+
+
 struct supp_page *
 supp_page_lookup (struct supp_page_table *spt, void *uaddr)
 {
@@ -99,12 +138,3 @@ supp_page_alloc (struct supp_page *spe)
                     spe->fte->paddr, !spe->fte->ro);
 }
 
-
-/* Removes the page entry from physical memory. Updates
-   the real page table with the mapping. */
-void
-supp_page_dealloc (struct supp_page *spe)
-{
-  /* Deallocate the frame */
-  pagedir_clear_page (spe->thread->pagedir, spe->uaddr);
-}

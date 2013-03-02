@@ -251,7 +251,11 @@ process_cleanup (int exit_code)
   /* Close all files opened by this process */
   file_close (t->pinfo->fp);
 
+#ifdef VM
   mmap_table_destroy ();
+  supp_page_table_free (t->spt);
+#endif
+
   lock_release (&cleanup_lock);
 }
 
