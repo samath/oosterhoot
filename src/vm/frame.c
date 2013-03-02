@@ -122,16 +122,16 @@ frame_dealloc (struct frame *fte)
   lock_acquire(&fte->lock);
 
   struct list_elem *e = list_begin (&fte->users);
-  for (; e != list_end (&fte->users); e = list_remove (e)) {
+  for (; e != list_end (&fte->users); e = list_next (e)) {
     struct supp_page *spe = list_entry (e, struct supp_page, list_elem);
 
-    if (!pagedir_is_dirty (spe->thread->pagedir, spe->uaddr) ||
-      fte->ro)
+    if ((fte->src != FRAME_SWAP) && (!pagedir_is_dirty (spe->thread->pagedir, spe->uaddr) ||
+      fte->ro))
     {
       /* Do nothing */
     }
     /* Write to mmapped file if necessary */
-    if (fte->src == FRAME_MMAP &&
+    else if (fte->src == FRAME_MMAP &&
         ((struct mmap_entry *)fte->aux)->fm) /* check if data segment */
     {    
       struct mmap_entry *mme = (struct mmap_entry *) fte->aux;
