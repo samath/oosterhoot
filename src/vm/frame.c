@@ -49,6 +49,10 @@ frame_free (struct frame *fte)
 {
   if (fte->paddr != NULL) {
     lock_acquire (&frame_lock);
+    /* Mark as read-only to ensure deletion without swapping */
+    if (fte->src == FRAME_SWAP) {
+      fte->ro = FRAME_ZERO;
+    }
     frame_dealloc (fte);
     list_remove (&fte->elem);
     lock_release (&frame_lock);
