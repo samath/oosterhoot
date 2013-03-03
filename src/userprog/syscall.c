@@ -278,24 +278,38 @@ static int syscall_filesize (int fd)
   return retval;
 }
 
+static void pin_buffer (void *buffer, unsigned size, bool val)
+{
+  struct supp_page_table *spt = thread_current ()->spt;
+  struct supp_page *spe;
+
+  unsigned int ofs = 0;
+  for (; ofs < size; ofs += PGSIZE) {
+    spe = supp_page_lookup (spt, ((char *)buffer) + ofs);
+    spe->fte->pinned = val;
+  }
+}
+
 static int syscall_read (int fd, void *buffer, unsigned size)
 {
+  pin_buffer (buffer, size, true);
+  int retval = -1;
+
   if (fd == STDIN_FILENO) {
     unsigned int i = 0;
     for (; i < size; i++)
       *((char *) buffer + size) = input_getc();
-    return 0;
-  }
-    
-  struct file_with_lock fwl = fwl_from_fd (fm, fd);
-
-  int retval = -1;
-  if (fwl.fp && fwl.mode == FM_MODE_FD) {
-    lock_acquire (fwl.lock);
-    retval = file_read (fwl.fp, buffer, size);
-    lock_release (fwl.lock);
+    retval = 0;
+  } else {    
+    struct file_with_lock fwl = fwl_from_fd (fm, fd);
+    if (fwl.fp && fwl.mode == FM_MODE_FD) {
+      lock_acquire (fwl.lock);
+      retval = file_read (fwl.fp, buffer, size);
+      lock_release (fwl.lock);
+    }
   }
 
+  pin_buffer (buffer, size, false);
   return retval;
 }
 
@@ -303,24 +317,26 @@ static int syscall_read (int fd, void *buffer, unsigned size)
 
 static int syscall_write (int fd, const void *buffer, unsigned size)
 {
+  int retval = -1;
+  pin_buffer (buffer, size, true);
+
   if (fd == STDOUT_FILENO) { 
     unsigned offset = 0;
     for (; offset < size; offset += PUTBUF_MAX) {
       putbuf (buffer + offset, 
         (size - offset > PUTBUF_MAX ? PUTBUF_MAX : size - offset));
     }
-    return 0;
+    retval = 0;
+  } else {
+    struct file_with_lock fwl = fwl_from_fd (fm, fd);
+    if (fwl.fp && fwl.mode == FM_MODE_FD) {
+      lock_acquire (fwl.lock);
+      retval = file_write (fwl.fp, buffer, size);
+      lock_release (fwl.lock);
+    }
   }
 
-  struct file_with_lock fwl = fwl_from_fd (fm, fd);
-
-  int retval = -1;
-  if (fwl.fp && fwl.mode == FM_MODE_FD) {
-    lock_acquire (fwl.lock);
-    retval = file_write (fwl.fp, buffer, size);
-    lock_release (fwl.lock);
-  }
-
+  pin_buffer (buffer, size, true);
   return retval;
 }
 
