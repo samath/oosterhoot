@@ -68,9 +68,42 @@ Thomas Shepherd: Swap table, eviction
 >> A2: In a few paragraphs, describe your code for locating the frame,
 >> if any, that contains the data of a given page.
 
+When a page is allocated in supp_page_alloc, a single frame is also allocated
+to coincide one-to-one with the page. The page then stores a pointer to this
+frame, whose physical address points to the actual data in main memory. The
+supp_page_alloc function also calls pagedir_set_page which maps the user
+virtual address to the frames's address in the main page table. Whenever a page
+is first created, supp_page_insert gets called which adds the page to the hash
+representing the supplemental page table.
+
+If a user tries to access the data of its user address, the main page table
+will correctly map the address to the corresponding frame. If the associated
+page is not currently in memory, a page fault will occur.
+
+Page faults in a valid memory range will trigger a supp_page_lookup call that
+searches the entire supplmental page table to find a pre-existing page mapped
+to that specific user address. If a pre-existing page exists, a new frame gets
+allocated to it. If no pre-existing page is found, a brand new page is inserted
+into the supplemental page table before allocating a new frame. In either case,
+the new frame will get associated with the user address through
+pagedir_set_page, and the user code will get correctly mapped to a frame.
+
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
+
+We anticipated handling aliasing by creating a list of users in each frame
+entry that could point to any number of pages using that specific frame. With
+this method, when we check for accessed bits in the clock eviction algorithm
+or check for dirty bits when evicting a frame, we loop through all the frame's
+users, making sure none of the corresponding pages have been accessed and none
+of the corresponding pages are dirty respectively.
+
+However, we found it simpler to avoid the aliasing issue by always using the
+user virtual address. In fact, we never add the kernel page table to the list
+of frame's users since we do not use the kernel addresses. Our code therefore
+loops through the list of users which has a size of 1, but it setup for
+later expansions into page sharing by using this list.
 
 ---- SYNCHRONIZATION ----
 
@@ -132,6 +165,9 @@ a longer linear scan of the entire supplemental page table.
       struct lock swap_table_lock;
     };
 
+The swap table holds the location of swap space on disk and creates a bitmap
+to track free and used pages in the swap space.
+
 
 ---- ALGORITHMS ----
 
@@ -154,6 +190,22 @@ to the location specified by the src field and then freed.
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
+
+The page table maps a particular user address to where the corresponding frame
+was last in memory, information that is contained in a frame entry. When the
+eviction process kicks out the frame being used by process Q, the frame gets
+deallocated, and moved back to disk if necessary. The frame entry is updated
+to show that the frame no longer exists by setting the frame's address to NULL.
+The frame in memory is then cleared and free'd to be used by a different
+process. The page table however is unchanged, still pointing to the same frame
+entry. This gives the illusion that the page is always there in memory.
+
+When process P allocates a new frame, and palloc_get_page happens to grab the
+frame previously used by Q, the frame entry corresponding to the page that
+process P is accessing gets updated to point to this new frame. Again the page
+table itself is not changed unless the page is being accessed for the first
+time, in which a supplemental page entry is inserted to the supplemental page
+table.
 
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
