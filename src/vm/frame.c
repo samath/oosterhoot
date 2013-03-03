@@ -139,11 +139,17 @@ void
 frame_dealloc (struct frame *fte)
 {
   lock_acquire(&fte->lock);
+
+  void *tmp = fte->paddr;
+  fte->paddr = NULL;
+
   struct list_elem *e = list_begin (&fte->users);
   for (; e != list_end (&fte->users); e = list_next (e)) {
     struct supp_page *spe = list_entry (e, struct supp_page, list_elem);
-    if ((fte->src != FRAME_SWAP) && 
-        (!pagedir_is_dirty (spe->thread->pagedir, spe->uaddr) || fte->ro))
+    bool is_dirty = pagedir_is_dirty (spe->thread->pagedir, spe->uaddr);
+    pagedir_clear_page (spe->thread->pagedir, spe->uaddr);
+
+    if ((fte->src != FRAME_SWAP) && (!is_dirty || fte->ro))
     {
       /* Do nothing */
     }
@@ -159,23 +165,20 @@ frame_dealloc (struct frame *fte)
       
       struct file_with_lock fwl = fwl_from_fd (mme->fm, (int) mme->map_id);
       if (fwl.lock) lock_acquire (fwl.lock);
-      file_write_at (mme->fp, spe->uaddr, bytes, page_num * PGSIZE);
+      file_write_at (mme->fp, tmp, bytes, page_num * PGSIZE);
       if (fwl.lock) lock_release (fwl.lock);
     }
     /* Write to swap space */
     else
     {
       fte->src = FRAME_SWAP;
-      swap_out (fte->paddr, (block_sector_t *) &fte->aux);
+      swap_out (tmp, (block_sector_t *) &fte->aux);
     } 
-
-    pagedir_clear_page (spe->thread->pagedir, spe->uaddr);
   }
 
   list_remove (&fte->elem);
-  void *tmp = fte->paddr;
-  fte->paddr = NULL;
   palloc_free_page (tmp);
+ 
   lock_release(&fte->lock);
 }
 
