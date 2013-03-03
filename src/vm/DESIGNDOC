@@ -138,6 +138,19 @@ a longer linear scan of the entire supplemental page table.
 >> B2: When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
 
+We implemented the clock algorithm from lecture. A "clock hand"
+pointer is initialized to point to some element in the frame table
+list. On eviction, we lock the frame table with a global lock
+and iterate the clock hand through the list of allocated frames.
+
+When the clock hand passes a frame that has been accessed by
+any of its users (indicated by the corresponding page tables),
+we zero the accessed bit(s) and move on. Otherwise, the frame
+is selected for eviction. If it is not dirty, the frame is
+palloc_freed immediately. Otherwise, its data is written back
+to the location specified by the src field and then freed.
+
+
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
