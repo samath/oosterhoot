@@ -135,7 +135,5 @@ void
 supp_page_alloc (struct supp_page *spe)
 {
   frame_alloc (spe->fte, spe->uaddr);
-  pagedir_set_page (spe->thread->pagedir, spe->uaddr,
-                    spe->fte->paddr, !spe->fte->ro);
 }
 

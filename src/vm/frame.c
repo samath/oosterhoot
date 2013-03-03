@@ -59,7 +59,6 @@ frame_free (struct frame *fte)
     frame_dealloc (fte);
     if(&fte->elem == clock_hand)
       clock_hand = NULL;
-    list_remove (&fte->elem);
     lock_release (&frame_lock);
   } else if (fte->src == FRAME_SWAP) {
     swap_delete (&fte->aux);
@@ -116,7 +115,17 @@ frame_alloc (struct frame *fte, void *uaddr)
 
   lock_acquire (&frame_lock);
   lock_acquire (&fte->lock);
+
+  /* Update the users' page tables */
+  struct list_elem *e = list_begin (&fte->users);
+  for (; e != list_end (&fte->users); e = list_next (e)) {
+    struct supp_page *spe = list_entry (e, struct supp_page, list_elem);
+    pagedir_set_page (spe->thread->pagedir, spe->uaddr,
+                      fte->paddr, !fte->ro);
+  }
+
   list_push_back (&frame_table, &fte->elem);
+
   lock_release (&fte->lock);
   lock_release (&frame_lock);
 }
@@ -164,8 +173,9 @@ frame_dealloc (struct frame *fte)
   }
 
   list_remove (&fte->elem);
-  palloc_free_page (fte->paddr);
+  void *tmp = fte->paddr;
   fte->paddr = NULL;
+  palloc_free_page (tmp);
   lock_release(&fte->lock);
 }
 
