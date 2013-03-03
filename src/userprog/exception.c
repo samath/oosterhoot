@@ -156,7 +156,6 @@ page_fault (struct intr_frame *f)
   struct supp_page_table *spt = t->spt;
   struct supp_page *spe = supp_page_lookup (spt, fault_addr);
 
-  /* TODO: synchronize this */
   if (spe == NULL) {
     /* No page entry exists, so alloc a new page for stack growth */
     char *esp = f->esp;

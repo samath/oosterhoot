@@ -240,6 +240,34 @@ are satisfied, the handler allocates a new pointer for stack extension.
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
 
+We attempted to abstract the VM into four different pieces.
+
+Pages are inserted and removed from the per process supplemental page table.
+Each insertion or removal acquires the page table lock. The page table lock
+is always released before any calls to frame locks, so deadlock is not an
+issue.
+
+Frames are created once per page, then allocated and deallocated as necessary
+by the page fault handler and the eviction process. Each allocation and
+deallocation acquires two separate locks. A global frame table lock is used to
+ensure the eviction process runs smoothly, with the clock_hand updating
+correctly across all processes. A more granular frame table entry lock is used
+inside each frame entry to ensure the same frame does not get allocated and
+deallocated at the same time. The most likely case for deadlock occurs during
+the eviction and allocation of frames. To prevent deadlock, we always acquire
+the global frame table lock before the individual frame entry lock whenever it
+is necessary to acquire both locks.
+
+Swap space uses its own swap table lock to prevent multiple processes from
+scanning and flipping bits on the swap space bitmap simultaneously. This
+prevents any race conditions of multiple processes trying to swap out memory
+to the same place. The swap locks are always called after any necessary frame
+locks, preventing deadlock.
+
+Finally, the mmap table uses a lock to protect insertions, removals, and
+lookups to its hash table. With only one lock here, deadlock is not any issue.
+
+
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
