@@ -223,7 +223,7 @@ table.
 >> invalid virtual address should cause the stack to be extended into
 >> the page that faulted.
 
-We first check to see see if there's an existing page entry in the
+We first check to see if there's an existing page entry in the
 supplemental page table for the faulting address. If there is, the page
 was already allocated at some point and thus isn't stack growth.
 
@@ -323,7 +323,7 @@ the process' initial stack frame.
 >> design it this way.
 
 As described in B5, we have one global lock for the frame table,
-a per-frame lock, a per-process lock for the supplemental page
+a per-frame lock, and a per-process lock for the supplemental page
 table. Although the global frame table lock is a bit of a bottleneck,
 our design is as granular as possible while still satisfying 
 the synchronization requirements. The frame table lock is
