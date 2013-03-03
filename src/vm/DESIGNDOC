@@ -110,6 +110,17 @@ later expansions into page sharing by using this list.
 >> A4: When two user processes both need a new frame at the same time,
 >> how are races avoided?
 
+If two processes call frame_alloc due to two separate page faults, both will
+call palloc_get_page simultaneously and attempt to get memory. However, if
+eviction occurs, they will be required to acquire the frame table lock before
+deallocating a different frame to free up space. Assuming no eviction is
+necessary, both processes will still try to acquire both a frame specific lock
+and the frame table lock. The frame specific lock assures that any previous
+deallocation calls have completely finished. This is important if the memory
+was swapped out, to ensure that correct data is swapped back in. The frame
+table lock allows us to safely insert the frame into the eviction queue in the
+clock algorithm.
+
 ---- RATIONALE ----
 
 >> A5: Why did you choose the data structure(s) that you did for
@@ -233,6 +244,18 @@ are satisfied, the handler allocates a new pointer for stack extension.
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
+
+During the eviction process, we call frame_dealloc which sets the frame's
+address to NULL and calls pagedir_clear_page to effectively stop process Q
+from accessesing or modifying the page. By calling pagedir_clear_page at the
+start of frame_dealloc, we are assured that any calls by process Q to the page
+will cause a page fault.
+
+If process Q does fault the page back in while P is evicting the page, Q will
+have to call frame_alloc which may call eviction itself, but ultimately
+acquires frame_lock, a global lock for the frame table, before adding the new
+frame to the list of possible frames to evict. Essentially Q will fault the
+page back into memory after P has fully evicted it.
 
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q

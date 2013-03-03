@@ -85,6 +85,8 @@ frame_alloc (struct frame *fte, void *uaddr)
   }
 
   struct mmap_entry *mme;
+  lock_acquire (&frame_lock);
+  lock_acquire (&fte->lock);
 
   switch (fte->src) {
     case FRAME_ZERO:
@@ -112,9 +114,6 @@ frame_alloc (struct frame *fte, void *uaddr)
     default:
       PANIC ("Invalid frame source");
   }
-
-  lock_acquire (&frame_lock);
-  lock_acquire (&fte->lock);
 
   /* Update the users' page tables */
   struct list_elem *e = list_begin (&fte->users);
