@@ -141,7 +141,7 @@ a longer linear scan of the entire supplemental page table.
       FRAME_SWAP
     };
 
-  An entry keeping track of a physical frame and the page tables
+  Keeps track of a physical frame and the page tables
   referencing the frame. When the frame is evicted, stores the
   swap or file location to which it ws written.
   
@@ -158,6 +158,9 @@ a longer linear scan of the entire supplemental page table.
     };
 
 
+  The swap table holds the location of swap space on disk and creates a bitmap
+  to track free and used pages in the swap space.
+
   struct swap_table
     {
       struct bitmap *map;
@@ -165,8 +168,6 @@ a longer linear scan of the entire supplemental page table.
       struct lock swap_table_lock;
     };
 
-The swap table holds the location of swap space on disk and creates a bitmap
-to track free and used pages in the swap space.
 
 
 ---- ALGORITHMS ----
@@ -211,6 +212,16 @@ table.
 >> invalid virtual address should cause the stack to be extended into
 >> the page that faulted.
 
+We first check to see see if there's an existing page entry in the
+supplemental page table for the faulting address. If there is, the page
+was already allocated at some point and thus isn't stack growth.
+
+Otherwise, the faulting address is a candidate for stack growth. The
+page fault handler checks that it is in the user virtual address space
+and four or thirty-two bytes below the stack pointer passed in the
+interrupt frame, and that the stack pointer is valid. If these conditions
+are satisfied, the handler allocates a new pointer for stack extension.
+
 ---- SYNCHRONIZATION ----
 
 >> B5: Explain the basics of your VM synchronization design.  In
@@ -233,6 +244,15 @@ table.
 >> in user programs), or do you have a mechanism for "locking" frames
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
+
+We prevent those pages from ever being paged out via a pinning
+mechanism as described in the assignment document. Pinned frames are
+skipped during eviction.
+
+During syscall reads and writes, the user buffers (which could otherwise
+be evicted) are all paged in and their corresponding frames are pinned. 
+We also pin during stack setup, since the kernel needs to reference
+the process' initial stack frame.
 
 ---- RATIONALE ----
 
@@ -355,7 +375,7 @@ is shifted to swap space. This difference only appears when evicting or
 exiting a data page, and after the first eviction it is treated as any other 
 space in the swap table.
 
-This strategy for managing executables is convenient because it takes advantag
+This strategy for managing executables is convenient because it takes advantage
 of the existing infrastructure.  Since all loading and writing to disk are 
 handled in frame_alloc and frame_dealloc, sharing the code path without 
 using an actual mmap_table is the most effective solution.
