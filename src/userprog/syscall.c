@@ -278,6 +278,8 @@ static int syscall_filesize (int fd)
   return retval;
 }
 
+/* Pin the pages in a buffer about to be accessed by the
+   kernel, allocating frames for them first if necessary. */
 static void pin_buffer (void *buffer, unsigned size, bool val)
 {
   struct supp_page_table *spt = thread_current ()->spt;
@@ -286,6 +288,8 @@ static void pin_buffer (void *buffer, unsigned size, bool val)
   unsigned int ofs = 0;
   for (; ofs < size; ofs += PGSIZE) {
     spe = supp_page_lookup (spt, ((char *)buffer) + ofs);
+    if (val && spe->fte->paddr == NULL)
+      supp_page_alloc (spe);
     spe->fte->pinned = val;
   }
 }
