@@ -262,6 +262,14 @@ page back into memory after P has fully evicted it.
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
 
+In frame_alloc, the frame is only appended to the table after the frame's
+data has already been read in. Thus, P's frame would not ever be
+visible to Q while being read in.
+
+Furthermore, both the eviction process and frame allocation + data
+reading occur inside the monitor protected by the frame table lock.
+Thus Q would not be able to evict the frame in the middle of reading.
+
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as
 >> in user programs), or do you have a mechanism for "locking" frames
