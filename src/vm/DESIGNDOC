@@ -322,6 +322,15 @@ the process' initial stack frame.
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
 
+As described in B5, we have one global lock for the frame table,
+a per-frame lock, a per-process lock for the supplemental page
+table. Although the global frame table lock is a bit of a bottleneck,
+our design is as granular as possible while still satisfying 
+the synchronization requirements. The frame table lock is
+necessary to protect insertions and deletions to the frame table
+list, and the page table lock is likewise necessary to synch
+hash operations.
+
 			 MEMORY MAPPED FILES
 			 ===================
 
