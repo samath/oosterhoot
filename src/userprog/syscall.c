@@ -196,6 +196,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_CLOSE:
       syscall_close ((int) argbuf[0]);
       break;
+#ifdef VM
     case SYS_MMAP:
       // addr will be checked internally inside mmap
       retval = (int) syscall_mmap ((int) argbuf[0], (void *) argbuf[1]);
@@ -203,6 +204,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_MUNMAP:
       syscall_munmap ((int) argbuf[0]);
       break;
+#endif
     default:
       printf("unhandled system call!\n");
       thread_exit();
@@ -352,6 +354,7 @@ static void syscall_close (int fd)
   close_fd (fm, fd);
 }
 
+#ifdef VM
 static mapid_t syscall_mmap (int fd, void *addr) 
 {
   if(fd == 0 || fd == 1 || addr == NULL || (int) addr % PGSIZE != 0) {
@@ -426,8 +429,10 @@ static struct mmap_entry * mmap_entry_from_fd (int fd)
   mme->zero_bytes = mme->num_pages * PGSIZE - filesize;
   return mme;
 }
+#endif
 
 static bool validate (void *uptr, void *esp) {
+#ifdef VM
   struct supp_page *spe = supp_page_lookup (thread_current ()->spt, uptr);
   if (spe != NULL) {
     if (spe->fte->paddr == NULL) supp_page_alloc (spe);
@@ -442,6 +447,9 @@ static bool validate (void *uptr, void *esp) {
     supp_page_alloc (spe);
     return true;
   } else return is_user_vaddr (uptr);
+#else
+  return is_user_vaddr (uptr);
+#endif
 }
   
 /* Convert a user virtual addr into a kernel virtual addr.

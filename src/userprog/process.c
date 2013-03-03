@@ -119,12 +119,14 @@ start_process (void *pinfo_)
   t->pinfo = pinfo;
   pinfo->tid = t->tid; 
 
+#ifdef VM
   /* Initialize supplemental page table.
      Do this here instead of in init_thread because the spt is
      associated with user processes only, not kernel threads */
   t->spt = supp_page_table_create ();
   /* Similarly for mmap_table */
   t->mmt = mmap_table_create ();
+#endif
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
