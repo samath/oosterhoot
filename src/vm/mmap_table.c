@@ -85,18 +85,6 @@ void mmap_table_insert (struct mmap_table *mmt,
   lock_release (&mmt->lock);
 }
 
-void mmap_table_remove (struct mmap_table *mmt, mapid_t map_id)
-{
-  lock_acquire (&mmt->lock);
-  struct mmap_entry *result = lookup (mmt, map_id);
-  if (result == NULL) {
-    lock_release (&mmt->lock);
-    return;
-  }
-  hash_delete (&mmt->table, &result->hash_elem);
-  lock_release (&mmt->lock);
-}
-
 void mmap_table_unmap (struct mmap_table *mmt, mapid_t map_id) 
 {
   lock_acquire (&mmt->lock);

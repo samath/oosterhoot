@@ -27,14 +27,17 @@ struct mmap_entry
                       // For indexing into table by map_id
 };
 
+// Initialize an empty mmap_table for a new thread.
 struct mmap_table *mmap_table_create (void);
+// Return a stored mmap_entry for the given map_id, or none if none exist.
 struct mmap_entry *mmap_table_lookup (struct mmap_table *mmt,
     mapid_t map_id);
+// Insert a fully initialized entry into the mmap_table.
 void mmap_table_insert (struct mmap_table *mmt, 
     struct mmap_entry *mme);
+// Write mmap'd pages back to file, and remove the corresponding map_id.
 void mmap_table_unmap (struct mmap_table *mmt, mapid_t map_id);
-void mmap_table_remove (struct mmap_table *mmt,
-    mapid_t map_id);
+// Write all mmap'd pages back to file and free storage on thread death.
 void mmap_table_destroy (void);
 
 #endif

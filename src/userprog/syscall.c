@@ -414,22 +414,15 @@ static mapid_t syscall_mmap (int fd, void *addr)
 
 static void syscall_munmap (mapid_t mid) 
 {
-  struct mmap_entry *mme = mmap_table_lookup (thread_current ()->mmt, mid);
-
-  unsigned i = 0;
-  for (; i < mme->num_pages; i++) {
-    void *uaddr = (char *) mme->uaddr + i * PGSIZE;
-    struct supp_page *sp = supp_page_lookup (thread_current ()->spt, uaddr); 
-    if (sp->fte != NULL) {
-      frame_free (sp->fte);
-    }
-    supp_page_remove (thread_current ()->spt, uaddr);
-  }
-
-  close_fd (fm, (int) mme->map_id);
-  mmap_table_remove (thread_current ()->mmt, mid);
+  mmap_table_unmap (thread_current ()->mmt, mid);
 }
 
+/*
+  Initialize an mmap_entry for the file corresponding to fd.
+  Calculate filesize, and use this to set filesize, fm, the file pointer,
+    num_pages, and zero_bytes.
+  Other fields are set on return in syscall_mmap.
+*/
 static struct mmap_entry * mmap_entry_from_fd (int fd)
 {
   struct file_with_lock fwl = fwl_from_fd (fm, fd);
@@ -453,11 +446,18 @@ static struct mmap_entry * mmap_entry_from_fd (int fd)
 
 static bool validate (void *uptr, void *esp) {
 #ifdef VM
+  //Check if uptr already has a valid entry in the supplemental page table.
   struct supp_page *spe = supp_page_lookup (thread_current ()->spt, uptr);
   if (spe != NULL) {
     if (spe->fte->paddr == NULL) supp_page_alloc (spe);
     return true;
-  } else if (esp >= STACK_BOUND && 
+  } 
+  /* Otherwise, address is valid only if it is stack growth / first access.
+    To do so, address must be above the bottom of the stack, 
+      a valid address (in particular, below PHYS_BASE,
+      and either above or exactly 4 /32 bytes below the passed in esp.
+  */
+  else if (esp >= STACK_BOUND && 
         ((uptr >= esp && is_user_vaddr (uptr))
         || (char *)uptr == (char *)esp - 4
         || (char *)uptr == (char *)esp - 32)) 

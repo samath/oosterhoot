@@ -229,9 +229,10 @@ was already allocated at some point and thus isn't stack growth.
 
 Otherwise, the faulting address is a candidate for stack growth. The
 page fault handler checks that it is in the user virtual address space
-and four or thirty-two bytes below the stack pointer passed in the
-interrupt frame, and that the stack pointer is valid. If these conditions
-are satisfied, the handler allocates a new pointer for stack extension.
+and is either above or four or thirty-two bytes below the stack 
+pointer passed in the interrupt frame, and that the stack pointer is valid.
+If these conditions are satisfied, the handler allocates a new 
+pointer for stack extension.
 
 ---- SYNCHRONIZATION ----
 

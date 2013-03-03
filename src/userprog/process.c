@@ -597,10 +597,23 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   file_seek (file, ofs);
 
 #ifdef VM
+  /* Construct a dummy mme for correct behavior during lazy loading.
+     File pointer, uaddr, num_pages, and zero_bytes are needed
+      during loading and evicting.
+    No map_id is needed, since this is not inserted into a table 
+      or used for lookups.
+    The file-map is set to NULL; this marks that the file is a data 
+      segment, and should be written to swap rather than back to disk.
+   */
+  
   struct mmap_entry *mme = malloc (sizeof (struct mmap_entry));
   if (mme == NULL) return false;
   mme->fp = file;
   mme->fm = NULL;
+  /* If ofs != 0, this pretends that the file starts ofs bytes 
+     earlier than it actually does.  This does not require extra 
+     pages, but makes it so that the correct information is read in.
+  */
   mme->uaddr = (char *)upage - ofs;
   mme->zero_bytes = zero_bytes % PGSIZE;
   mme->num_pages = (read_bytes + mme->zero_bytes) / PGSIZE;
